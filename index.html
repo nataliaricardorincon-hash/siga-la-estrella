@@ -24,6 +24,10 @@ p{line-height:1.5}
 .hero{background:linear-gradient(160deg,#1b2f66,#0f1c3d);color:#fff;border:none;text-align:center;padding:28px 18px}
 .hero h1{color:#fff;font-size:34px}
 .hero .star{font-size:64px;line-height:1;color:var(--oro2)}
+.tito{display:block;margin:0 auto 8px;max-height:220px;max-width:70%;object-fit:contain}
+.tito.sm{max-height:120px}
+.tito-row{display:flex;gap:14px;align-items:center}
+.tito-row .tito{margin:0;max-height:110px;max-width:110px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 18px;border-radius:12px;border:2px solid transparent;font:700 15px Montserrat,sans-serif;cursor:pointer;text-decoration:none}
 .btn.pri{background:var(--rojo);color:#fff}
 .btn.pri:hover{background:var(--vino)}
@@ -150,6 +154,7 @@ const S = { rol: null, centroId: null };
 /* ---------- Utilidades de vista ---------- */
 function view(html) { app.innerHTML = (DEMO ? `<div class="banner demo">Modo demostración: los datos se guardan solo en este navegador. Para usarla a nivel nacional, conecta Firebase (ver instrucciones).</div>` : "") + html; window.scrollTo(0, 0); }
 function msg(el, texto, tipo = "err") { el.innerHTML = `<div class="banner ${tipo}">${esc(texto)}</div>`; }
+const tito = (n, alt, cls = "") => `<img class="tito ${cls}" src="tito-${n}.png" alt="${esc(alt)}" onerror="this.remove()">`;
 const STAR_SVG = `<svg class="estrella" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4l13.6 29.6 32.4 3.7-24 22.1 6.6 32L50 75.4 21.4 91.4l6.6-32-24-22.1 32.4-3.7z" fill="#F2B705" stroke="#B37F00" stroke-width="3"/></svg>`;
 async function config() { return (await DB.get("config", "app")) || null; }
 function abierta(cfg) {
@@ -176,7 +181,7 @@ async function inicio() {
   const est = abierta(cfg);
   view(`
   <section class="card hero">
-    <div class="star">★</div>
+    ${tito("inicio", "Tito señala hacia la estrella con sus binoculares")}
     <h1>¡Siga la estrella!</h1>
     <p>Entre el 5 y el 7 de enero hay 10 estrellas escondidas en tu centro. Cada una marca una condición insegura simulada.</p>
     <p><b>${est.ok ? "La búsqueda está abierta." : esc(est.motivo)}</b></p>
@@ -202,7 +207,7 @@ async function inicio() {
 
 /* Primer uso: crear PIN de administrador */
 function primerUso() {
-  view(`<section class="card"><h1>Configuración inicial</h1>
+  view(`<section class="card">${tito("inicio", "Tito señala hacia la estrella", "sm")}<h1>Configuración inicial</h1>
   <p>Crea el PIN del administrador nacional. Guárdalo bien: con él se crean los centros y se ve el ranking completo.</p>
   <label for="p1">PIN del administrador (mínimo 6 dígitos)</label><input id="p1" type="password" inputmode="numeric" autocomplete="new-password">
   <label for="p2">Repite el PIN</label><input id="p2" type="password" inputmode="numeric" autocomplete="new-password">
@@ -219,7 +224,7 @@ function primerUso() {
 /* Login por PIN */
 async function login(rol) {
   const centros = rol === "hseq" ? (await DB.all("centros")).sort((a, b) => a.nombre.localeCompare(b.nombre)) : [];
-  view(`<section class="card"><h1>${rol === "admin" ? "Administración nacional" : "Ingreso HSEQ de centro"}</h1>
+  view(`<section class="card">${tito("hseq", "Tito con una lupa", "sm")}<h1>${rol === "admin" ? "Administración nacional" : "Ingreso HSEQ de centro"}</h1>
   ${rol === "hseq" ? `<label for="c">Centro de trabajo</label><select id="c"><option value="">Selecciona…</option>${centros.map(c => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join("")}</select>` : ""}
   <label for="p">PIN</label><input id="p" type="password" inputmode="numeric" autocomplete="current-password">
   <div id="m"></div><div class="row" style="margin-top:14px"><button class="btn pri" id="ok">Entrar</button><button class="btn sec" id="vol">Volver</button></div></section>`);
@@ -242,13 +247,13 @@ async function login(rol) {
 /* ---------- Participante: llegó por el QR de una estrella ---------- */
 async function estrella(tk) {
   const e = await DB.get("estrellas", tk);
-  if (!e) return view(`<section class="card"><h1>Estrella no encontrada</h1><p>Este código no corresponde a ninguna estrella activa. Avísale al HSEQ de tu centro.</p></section>`);
+  if (!e) return view(`<section class="card">${tito("alto", "Tito con la palma al frente", "sm")}<h1>Estrella no encontrada</h1><p>Este código no corresponde a ninguna estrella activa. Avísale al HSEQ de tu centro.</p></section>`);
   const cfg = await config(); const est = abierta(cfg);
   const c = await DB.get("centros", e.centroId);
-  if (!est.ok) return view(`<section class="card hero"><div class="star">★</div><h1>Estrella N.º ${e.numero}</h1><p>${esc(est.motivo)}</p></section>`);
+  if (!est.ok) return view(`<section class="card hero">${tito("alto", "Tito con la palma al frente")}<h1>Estrella N.º ${e.numero}</h1><p>${esc(est.motivo)}</p></section>`);
   const equipos = (c?.equipos || []);
   view(`
-  <section class="card hero"><div class="star">★</div><h1>¡Encontraste la estrella N.º ${e.numero}!</h1><p>${esc(c?.nombre || "")}</p></section>
+  <section class="card hero">${tito("encontrada", "Tito celebra que encontraste una estrella")}<h1>¡Encontraste la estrella N.º ${e.numero}!</h1><p>${esc(c?.nombre || "")}</p></section>
   <section class="card">
     <h2>Registra tu hallazgo</h2>
     <label for="eq">Tu equipo</label>
@@ -273,7 +278,7 @@ async function estrella(tk) {
       const prev = (await DB.where("registros", "estrella", tk));
       if (prev.some(r => r.equipo === eq)) { $("#env").disabled = false; return msg($("#m"), "Tu equipo ya registró esta estrella."); }
       await DB.add("registros", { estrella: tk, centroId: e.centroId, numero: e.numero, equipo: eq, integrantes: $("#in").value.trim().slice(0, 200), condicion: co, accion: ac, foto: foto || "", ts: Date.now(), estado: "pendiente", primero: prev.length === 0 });
-      view(`<section class="card hero"><div class="star">★</div><h1>¡Hallazgo enviado!</h1><p>Equipo <b>${esc(eq)}</b> · Estrella N.º ${e.numero}</p><p>El HSEQ de tu centro lo validará. ¡Sigue buscando las demás estrellas!</p></section><div class="row"><button class="btn sec" id="rk">Ver ranking</button></div>`);
+      view(`<section class="card hero">${tito("enviado", "Tito con el pulgar arriba")}<h1>¡Hallazgo enviado!</h1><p>Equipo <b>${esc(eq)}</b> · Estrella N.º ${e.numero}</p><p>El HSEQ de tu centro lo validará. ¡Sigue buscando las demás estrellas!</p></section><div class="row"><button class="btn sec" id="rk">Ver ranking</button></div>`);
       $("#rk").onclick = ranking;
     } catch (err) { $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Revisa tu conexión e intenta otra vez."); }
   };
@@ -289,7 +294,7 @@ function comprimir(file) {
 /* ---------- HSEQ de centro ---------- */
 async function hseq(tab = "validar") {
   const c = await DB.get("centros", S.centroId);
-  view(`<section class="card"><div class="row" style="justify-content:space-between"><div><h1>${esc(c.nombre)}</h1><p class="muted" style="margin:0">Panel HSEQ del centro</p></div><button class="btn sec sm" id="salir">Salir</button></div></section>
+  view(`<section class="card"><div class="row" style="justify-content:space-between"><div class="tito-row">${tito("hseq", "Tito con una lupa")}<div><h1>${esc(c.nombre)}</h1><p class="muted" style="margin:0">Panel HSEQ del centro</p></div></div><button class="btn sec sm" id="salir">Salir</button></div></section>
   <div class="tabs" role="group" aria-label="Secciones">
     <button data-t="validar" aria-pressed="${tab === "validar"}">Validar hallazgos</button>
     <button data-t="estrellas" aria-pressed="${tab === "estrellas"}">Mis 10 estrellas</button>
@@ -363,7 +368,7 @@ async function paneValidar(pane, c) {
   const est = Object.fromEntries((await DB.where("estrellas", "centroId", c.id)).map(e => [e.id, e]));
   const pend = regs.filter(r => r.estado === "pendiente");
   pane.innerHTML = `<section class="card"><h2>Hallazgos por validar (${pend.length})</h2>
-  ${regs.length === 0 ? `<p class="muted">Todavía no hay hallazgos registrados.</p>` : regs.map(r => {
+  ${regs.length === 0 ? `${tito("hseq", "Tito con una lupa", "sm")}<p class="muted" style="text-align:center">Todavía no hay hallazgos registrados.</p>` : regs.map(r => {
     const e = est[r.estrella] || {};
     return `<div class="card" style="background:#FCFCFC">
       <div class="row" style="justify-content:space-between"><div><b>Estrella N.º ${r.numero}</b> · ${esc(r.equipo)} ${r.primero ? `<span class="tag val">Primero en hallarla</span>` : ""}</div>
@@ -409,7 +414,7 @@ async function ranking() {
   const [regs, cs] = await Promise.all([DB.all("registros"), DB.all("centros")]);
   const centros = Object.fromEntries(cs.map(c => [c.id, c]));
   const rk = agregarEquipos(regs);
-  view(`<section class="card hero"><div class="star">★</div><h1>Ranking nacional</h1><p>Solo cuentan los hallazgos validados por el HSEQ de cada centro.</p></section>
+  view(`<section class="card hero">${tito("ranking", "Tito celebra con confeti")}<h1>Ranking nacional</h1><p>Solo cuentan los hallazgos validados por el HSEQ de cada centro.</p></section>
   ${rk.length ? `<div class="podio" style="margin-bottom:16px">${rk.slice(0, 3).map((x, i) => `<div><span>${["🥇", "🥈", "🥉"][i]}</span><b>${x.pts} pts</b>${esc(x.equipo)}<br><small class="muted">${esc(centros[x.centroId]?.nombre || "")}</small></div>`).join("")}</div>` : ""}
   <section class="card">${tablaRank(rk, centros, true)}</section><button class="btn sec" id="vol">Volver</button>`);
   $("#vol").onclick = inicio;
@@ -417,7 +422,7 @@ async function ranking() {
 
 /* ---------- Administración nacional ---------- */
 async function admin(tab = "resumen") {
-  view(`<section class="card"><div class="row" style="justify-content:space-between"><div><h1>Administración nacional</h1><p class="muted" style="margin:0">¡Siga la estrella! · todos los centros</p></div><button class="btn sec sm" id="salir">Salir</button></div></section>
+  view(`<section class="card"><div class="row" style="justify-content:space-between"><div class="tito-row">${tito("hseq", "Tito con una lupa")}<div><h1>Administración nacional</h1><p class="muted" style="margin:0">¡Siga la estrella! · todos los centros</p></div></div><button class="btn sec sm" id="salir">Salir</button></div></section>
   <div class="tabs" role="group" aria-label="Secciones">
     <button data-t="resumen" aria-pressed="${tab === "resumen"}">Resumen</button>
     <button data-t="centros" aria-pressed="${tab === "centros"}">Centros</button>
@@ -494,7 +499,7 @@ async function admActividad(pane) {
 $("#lnkInicio").onclick = (e) => { e.preventDefault(); history.replaceState(null, "", location.pathname); S.rol = null; inicio(); };
 const tk = new URLSearchParams(location.search).get("s");
 try { tk ? await estrella(tk) : await inicio(); }
-catch (err) { console.error(err); view(`<div class="banner err">No se pudo conectar con la base de datos. Revisa tu conexión o la configuración de Firebase.</div>`); }
+catch (err) { console.error(err); view(`${tito("alto", "Tito con la palma al frente", "sm")}<div class="banner err">No se pudo conectar con la base de datos. Revisa tu conexión o la configuración de Firebase.</div>`); }
 </script>
 </body>
 </html>
