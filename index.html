@@ -89,7 +89,7 @@ footer{text-align:center;color:var(--gris2);font-size:12px;padding:18px}
 <main id="app" aria-live="polite"></main>
 <footer>HSEQ · Grupo ANAVA · 1 de diciembre de 2026 – 9 de enero de 2027</footer>
 
-<script src="preguntas.js?v=20261120-2"></script>
+<script src="preguntas.js?v=20261120-3"></script>
 <script type="module">
 /* ================== CONFIGURACIÓN ================== */
 const firebaseConfig = {
@@ -103,13 +103,13 @@ const firebaseConfig = {
 /* Misiones de trivia: 5 preguntas, 1 estrella por acierto + 1 si acierta las 5 (la final vale doble). */
 const MISIONES = [
   { id: "m1", fase: "Velitas", ico: "🕯️", titulo: "Enciende la prevención", tema: "Pólvora, velas y quemaduras", abre: "2026-12-01T00:00" },
-  { id: "m2", fase: "Velitas", ico: "⚡", titulo: "Ronda de chispas", tema: "Decoraciones eléctricas y extintores", abre: "2026-12-03T00:00" },
-  { id: "m3", fase: "Navidad", ico: "⏱️", titulo: "Pausa de 10 segundos", tema: "Las 3 preguntas, fatiga y concentración", abre: "2026-12-10T00:00" },
-  { id: "m4", fase: "Navidad", ico: "🎁", titulo: "Cuidarnos es el regalo", tema: "Montacargas, cargas, alcohol y seguridad física", abre: "2026-12-16T00:00" },
+  { id: "m2", fase: "Velitas", ico: "⚡", titulo: "Ronda de chispas", tema: "Luces navideñas, enchufes y extintores", abre: "2026-12-03T00:00" },
+  { id: "m3", fase: "Navidad", ico: "⏱️", titulo: "Pausa de 10 segundos", tema: "Las 3 preguntas antes de empezar y el cansancio", abre: "2026-12-10T00:00" },
+  { id: "m4", fase: "Navidad", ico: "🎁", titulo: "Cuidarnos es el regalo", tema: "Montacargas, cargas, trago y seguridad en la bodega", abre: "2026-12-16T00:00" },
   { id: "m5", fase: "Año Nuevo", ico: "🦺", titulo: "Agüeros seguros", tema: "Chaleco, viaje seguro, orden y aseo", abre: "2026-12-26T00:00" },
-  { id: "m6", fase: "Año Nuevo", ico: "🛣️", titulo: "Ruta Segura 2027", tema: "Reporte ACIS, EPP y compromisos", abre: "2026-12-29T00:00" },
-  { id: "m7", fase: "Reyes", ico: "👑", titulo: "Regreso seguro", tema: "Reinducción, pausas activas y los tres regalos", abre: "2027-01-04T00:00" },
-  { id: "m8", fase: "Reyes", ico: "⭐", titulo: "Gran final: Siga la estrella", tema: "Repaso de toda la campaña · estrellas dobles", abre: "2027-01-06T00:00", doble: true }
+  { id: "m6", fase: "Año Nuevo", ico: "🛣️", titulo: "Ruta Segura 2027", tema: "Reportar lo que está mal y cuidar tu protección", abre: "2026-12-29T00:00" },
+  { id: "m7", fase: "Reyes", ico: "👑", titulo: "Regreso seguro", tema: "Volver de vacaciones con cuidado", abre: "2027-01-04T00:00" },
+  { id: "m8", fase: "Reyes", ico: "⭐", titulo: "Gran final: Siga la estrella", tema: "Repaso de todo · vale doble", abre: "2027-01-06T00:00", doble: true }
 ];
 /* Actividades con foto: el HSEQ del centro aprueba la foto y se otorgan las estrellas. */
 const FOTOS = [
@@ -198,7 +198,7 @@ async function inicio() {
   view(`
   <section class="card hero">${tito("inicio", "Tito señala hacia la estrella")}
     <h1>¡Siga la estrella!</h1>
-    <p>Del 1 de diciembre al 9 de enero completa misiones, junta estrellas y gana. Habrá un ganador nacional y un ganador por cada centro de trabajo.</p>
+    <p>Del 1 de diciembre al 9 de enero responde misiones, junta estrellas y gana. Hay un ganador en todo el país y un ganador en cada centro de trabajo.</p>
   </section>
   <section class="card">
     <h2>Entra con tu cédula</h2>
@@ -206,7 +206,7 @@ async function inicio() {
     <input id="ced" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Solo números">
     <div id="m"></div>
     <div class="row" style="margin-top:12px"><button class="btn pri full" id="ent">Entrar</button></div>
-    <p class="muted" style="font-size:13px">Tu cédula se guarda cifrada: nadie puede verla completa. En pantalla solo aparecen los últimos 4 dígitos.</p>
+    <p class="muted" style="font-size:13px">Tu cédula se guarda en clave: nadie puede verla completa. Solo se muestran los últimos 4 números.</p>
   </section>
   <div class="row"><button class="btn sec" id="bRank">Ver ranking</button><button class="btn sec" id="bHseq">Soy HSEQ de centro</button><button class="btn sec" id="bAdm">Administración</button></div>`);
   $("#ced").onkeydown = (e) => { if (e.key === "Enter") $("#ent").click(); };
@@ -227,7 +227,7 @@ function registro(pid, c4) {
   <h1>Regístrate una sola vez</h1><p class="muted">Cédula terminada en <b>${esc(c4)}</b></p>
   <label for="nom">Nombre y apellido</label><input id="nom" maxlength="60" autocomplete="name">
   <label for="cen">Centro de trabajo</label><select id="cen"><option value="">Selecciona tu centro…</option>${cs.map(c => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join("")}</select>
-  <label class="check"><input type="checkbox" id="aut"> Autorizo al Grupo ANAVA a tratar mis datos (nombre, centro de trabajo y cédula cifrada) solo para la campaña HSEQ decembrina y la entrega de premios, según la Ley 1581 de 2012.</label>
+  <label class="check"><input type="checkbox" id="aut"> Autorizo a ANAVA a usar mi nombre, mi centro de trabajo y mi cédula (guardada en clave) solo para esta campaña y la entrega de premios (Ley 1581 de 2012).</label>
   <div id="m"></div>
   <div class="row" style="margin-top:12px"><button class="btn pri" id="ok">Registrarme</button><button class="btn sec" id="vol">Volver</button></div></section>`);
   $("#vol").onclick = inicio;
@@ -272,7 +272,7 @@ async function panel(p) {
   ${terminada() ? `<div class="banner okb">La campaña terminó. ¡Gracias por participar! Mira los ganadores en el ranking.</div>` : ""}
   <section class="card"><h2>Tus misiones</h2>
   ${FASES.map(f => `<div class="fase">${f}</div>${MISIONES.filter(m => m.fase === f).map(m => item(m, "m")).join("")}${FOTOS.filter(x => x.fase === f).map(x => item(x, "f")).join("")}`).join("")}
-  <p class="muted" style="font-size:13px">Misiones de trivia: ${PREG} preguntas, ${SEG} segundos por pregunta y un solo intento. Ganas 1 estrella por respuesta correcta y 1 extra si aciertas todas. La gran final vale doble.</p>
+  <p class="muted" style="font-size:13px">Cada misión tiene ${PREG} preguntas. Tienes ${SEG} segundos para cada una y una sola oportunidad. Ganas 1 estrella por cada respuesta buena y 1 más si las aciertas todas. La gran final da el doble.</p>
   </section>
   <div class="row"><button class="btn sec" id="bRank">Ver ranking</button><button class="btn sec" id="salir">No soy ${esc(corto(p.nombre))}</button></div>`);
   app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => trivia(p, MISIONES.find(m => m.id === b.dataset.m)));
@@ -296,7 +296,7 @@ async function trivia(p, m) {
   if (it?.estado === "terminado") return panel(p);
   if (!it) {
     view(`<section class="card hero"><div style="font-size:54px" aria-hidden="true">${m.ico}</div><h1>${esc(m.titulo)}</h1><p>${esc(m.tema)}</p></section>
-    <section class="card"><ul><li><b>${PREG} preguntas</b>, ${SEG} segundos cada una.</li><li><b>Un solo intento.</b> Si cierras la app, continúas donde ibas.</li><li>Hasta <b>${maxMision(m)} estrellas</b>${m.doble ? " (esta misión vale doble)" : ""}.</li></ul>
+    <section class="card"><ul><li><b>${PREG} preguntas</b>, ${SEG} segundos cada una.</li><li><b>Una sola oportunidad.</b> Si se cierra la app, sigues donde ibas.</li><li>Hasta <b>${maxMision(m)} estrellas</b>${m.doble ? " (esta misión vale doble)" : ""}.</li></ul>
     <div class="row"><button class="btn pri" id="go">Empezar</button><button class="btn sec" id="vol">Volver</button></div></section>`);
     $("#vol").onclick = () => panel(p);
     $("#go").onclick = async () => {
