@@ -111,8 +111,11 @@ const MISIONES = [
   { id: "m7", fase: "Reyes", ico: "👑", titulo: "Regreso seguro", tema: "Volver de vacaciones con cuidado", abre: "2027-01-04T00:00" },
   { id: "m8", fase: "Reyes", ico: "⭐", titulo: "Gran final: Siga la estrella", tema: "Repaso de todo · vale doble", abre: "2027-01-06T00:00", doble: true }
 ];
-/* Actividades con foto: el HSEQ del centro aprueba la foto y se otorgan las estrellas. */
+/* Actividades revisadas por HSEQ (foto o texto): el HSEQ del centro aprueba y se otorgan las estrellas. */
 const FOTOS = [
+  { id: "compromiso", fase: "Velitas", ico: "✍️", titulo: "Mi compromiso de temporada", estrellas: 10, abre: "2026-12-01T00:00", cierra: "2026-12-09T23:59", tipo: "texto",
+    instr: "Escribe con tus palabras qué vas a hacer para trabajar seguro y llegar sano a casa en esta temporada. Debe ser algo concreto que tú mismo hagas.",
+    ejemplos: ["Hago mi inspección preoperacional antes de mover el montacargas, aunque haya afán.", "Uso mi chaleco y mis guantes todo el turno, no solo cuando me ven.", "Si estoy cansado o con sueño, aviso antes de conducir u operar.", "Reporto cualquier condición insegura que vea, el mismo día.", "Respeto los pasillos peatonales y no paso por debajo de cargas."] },
   { id: "familia", fase: "Navidad", ico: "💌", titulo: "Mensaje de mi familia", estrellas: 10, abre: "2026-12-11T00:00", cierra: "2026-12-23T23:59",
     instr: "Lleva la tarjeta a casa, pide a tu familia que escriba o dibuje por qué te espera sano esta Navidad y sube aquí una foto de la tarjeta.", privada: true },
   { id: "muro", fase: "Año Nuevo", ico: "📸", titulo: "Muro del orgullo operativo", estrellas: 10, abre: "2026-12-28T00:00", cierra: "2027-01-06T23:59",
@@ -257,11 +260,11 @@ async function panel(p) {
     } else {
       if (it?.estado === "aprobada") { est = `<span class="tag val">Aprobada · ${a.estrellas} ⭐</span>`; cls = "hecha"; }
       else if (it?.estado === "pendiente") est = `<span class="tag pend">En revisión del HSEQ</span>`;
-      else if (it?.estado === "rechazada" && ab) { est = `<span class="tag rec">Rechazada: ${esc(it.motivo || "")}</span>`; btn = `<button class="btn pri sm" data-f="${a.id}">Subir otra</button>`; cls = "abierta"; }
-      else if (ab) { est = `<span class="tag pend">${a.estrellas} ⭐ al aprobarse</span>`; btn = `<button class="btn pri sm" data-f="${a.id}">Subir foto</button>`; cls = "abierta"; }
+      else if (it?.estado === "rechazada" && ab) { est = `<span class="tag rec">Rechazada: ${esc(it.motivo || "")}</span>`; btn = `<button class="btn pri sm" data-f="${a.id}">${a.tipo === "texto" ? "Escribir otro" : "Subir otra"}</button>`; cls = "abierta"; }
+      else if (ab) { est = `<span class="tag pend">${a.estrellas} ⭐ al aprobarse</span>`; btn = `<button class="btn pri sm" data-f="${a.id}">${a.tipo === "texto" ? "Escribir" : "Subir foto"}</button>`; cls = "abierta"; }
       else est = ahora() < Date.parse(a.abre) && !CFG.pruebas ? `<span class="tag lock">Abre ${fmtF(a.abre)}</span>` : `<span class="tag lock">Cerrada</span>`;
     }
-    return `<div class="mision ${cls}"><div class="ico" aria-hidden="true">${a.ico}</div><div class="info"><b>${esc(a.titulo)}</b><small>${tipo === "m" ? esc(a.tema) : "Actividad con foto"}</small><div>${est}</div></div>${btn}</div>`;
+    return `<div class="mision ${cls}"><div class="ico" aria-hidden="true">${a.ico}</div><div class="info"><b>${esc(a.titulo)}</b><small>${tipo === "m" ? esc(a.tema) : a.tipo === "texto" ? "Escríbelo en la app · lo revisa HSEQ" : "Actividad con foto"}</small><div>${est}</div></div>${btn}</div>`;
   };
   view(`
   <section class="card hero">${tito(p.estrellas > 0 ? "encontrada" : "inicio", "Tito te acompaña")}
@@ -356,6 +359,7 @@ async function terminar(p, m, iid, it) {
 /* ---------- Foto ---------- */
 async function subirFoto(p, a) {
   if (!abierta(a)) return panel(p);
+  if (a.tipo === "texto") return escribir(p, a);
   view(`<section class="card hero"><div style="font-size:54px" aria-hidden="true">${a.ico}</div><h1>${esc(a.titulo)}</h1><p>${a.estrellas} estrellas cuando el HSEQ de tu centro apruebe la foto</p></section>
   <section class="card"><p>${esc(a.instr)}</p>${a.privada ? `<p class="muted" style="font-size:13px">Esta foto solo la ven el HSEQ de tu centro y la administración. No se publica.</p>` : ""}
   <label for="fo">Foto</label><input id="fo" type="file" accept="image/*" capture="environment">
@@ -370,6 +374,32 @@ async function subirFoto(p, a) {
     try {
       await DB.set("fotos", p.id + "_" + a.id, { pid: p.id, nombre: p.nombre, centroId: p.centroId, actividad: a.id, foto, estado: "pendiente", motivo: "", ts: ahora() });
       view(`<section class="card hero">${tito("enviado", "Tito con el pulgar arriba")}<h1>¡Foto enviada!</h1><p>El HSEQ de tu centro la revisará. Cuando la apruebe, sumarás ${a.estrellas} estrellas.</p></section><button class="btn pri full" id="vol">Volver a mis misiones</button>`);
+      $("#vol").onclick = async () => panel(await DB.get("participantes", p.id));
+    } catch { $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Revisa tu conexión e intenta otra vez."); }
+  };
+}
+
+/* ---------- Compromiso (texto) ---------- */
+async function escribir(p, a) {
+  view(`<section class="card hero"><div style="font-size:54px" aria-hidden="true">${a.ico}</div><h1>${esc(a.titulo)}</h1><p>${a.estrellas} estrellas cuando el HSEQ de tu centro lo apruebe</p></section>
+  <section class="card"><p>${esc(a.instr)}</p>
+  <p class="muted" style="font-size:13px;margin-bottom:6px">¿No sabes cómo empezar? Toca un ejemplo y cámbialo a tu manera:</p>
+  <div class="row" style="flex-wrap:wrap;gap:6px">${a.ejemplos.map((e, i) => `<button class="btn sec sm" data-e="${i}" style="text-align:left">${esc(e)}</button>`).join("")}</div>
+  <label for="tx">Mi compromiso</label><textarea id="tx" rows="4" maxlength="280" placeholder="Esta temporada yo me comprometo a…" style="width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid #ccc"></textarea>
+  <small class="muted" id="cnt">0 / 280</small>
+  <div id="m"></div>
+  <div class="row" style="margin-top:12px"><button class="btn pri" id="env">Enviar compromiso</button><button class="btn sec" id="vol">Volver</button></div></section>`);
+  const tx = $("#tx");
+  tx.oninput = () => { $("#cnt").textContent = tx.value.length + " / 280"; };
+  app.querySelectorAll("[data-e]").forEach(b => b.onclick = () => { tx.value = a.ejemplos[+b.dataset.e]; tx.oninput(); tx.focus(); });
+  $("#vol").onclick = () => panel(p);
+  $("#env").onclick = async () => {
+    const t = tx.value.trim();
+    if (t.length < 20) return msg($("#m"), "Escribe un poco más: cuenta qué vas a hacer y cuándo.");
+    $("#env").disabled = true;
+    try {
+      await DB.set("fotos", p.id + "_" + a.id, { pid: p.id, nombre: p.nombre, centroId: p.centroId, actividad: a.id, foto: "", texto: t, estado: "pendiente", motivo: "", ts: ahora() });
+      view(`<section class="card hero">${tito("enviado", "Tito con el pulgar arriba")}<h1>¡Compromiso enviado!</h1><p>El HSEQ de tu centro lo revisará. Cuando lo apruebe, sumarás ${a.estrellas} estrellas.</p></section><button class="btn pri full" id="vol">Volver a mis misiones</button>`);
       $("#vol").onclick = async () => panel(await DB.get("participantes", p.id));
     } catch { $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Revisa tu conexión e intenta otra vez."); }
   };
@@ -436,7 +466,7 @@ async function hseq(tab = "fotos") {
   const c = CENTROS[S.centroId];
   const fotos = await DB.where("fotos", "centroId", c.id);
   const pend = fotos.filter(f => f.estado === "pendiente");
-  view(encabezado(c.nombre, "Panel HSEQ del centro", [["fotos", `Fotos por aprobar (${pend.length})`], ["part", "Participantes"], ["hist", "Fotos revisadas"]], tab));
+  view(encabezado(c.nombre, "Panel HSEQ del centro", [["fotos", `Por aprobar (${pend.length})`], ["part", "Participantes"], ["hist", "Revisadas"]], tab));
   $("#salir").onclick = () => { S.rol = null; inicio(); };
   app.querySelectorAll(".tabs button").forEach(b => b.onclick = () => hseq(b.dataset.t));
   const pane = $("#pane");
@@ -446,14 +476,14 @@ async function hseq(tab = "fotos") {
     return;
   }
   const lista = tab === "fotos" ? pend : fotos.filter(f => f.estado !== "pendiente");
-  pane.innerHTML = `<section class="card"><h2>${tab === "fotos" ? "Fotos por aprobar" : "Fotos revisadas"}</h2>
+  pane.innerHTML = `<section class="card"><h2>${tab === "fotos" ? "Fotos y compromisos por aprobar" : "Revisados"}</h2>
   ${lista.length ? lista.sort((a, b) => a.ts - b.ts).map(f => { const a = FOTOS.find(x => x.id === f.actividad) || {}; return `<div class="card" style="background:#FCFCFC">
     <div class="row" style="justify-content:space-between"><b>${esc(a.titulo)}</b><span class="tag ${f.estado === "pendiente" ? "pend" : f.estado === "aprobada" ? "val" : "rec"}">${f.estado}</span></div>
     <p class="muted" style="margin:4px 0">${esc(f.nombre)} · ${new Date(f.ts).toLocaleString("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
     <p style="font-size:13px" class="muted">Criterio: ${esc(a.instr)}</p>
-    ${f.foto ? `<img class="foto" src="${f.foto}" alt="Foto enviada por ${esc(f.nombre)}">` : ""}
+    ${f.foto ? `<img class="foto" src="${f.foto}" alt="Foto enviada por ${esc(f.nombre)}">` : ""}${f.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(f.texto)}»</blockquote>` : ""}
     ${f.estado === "pendiente" ? `<div class="row"><button class="btn ok sm" data-ok="${esc(f.id)}">Aprobar (+${a.estrellas} ⭐)</button><button class="btn no sm" data-no="${esc(f.id)}">Rechazar</button></div><div id="r-${esc(f.id)}"></div>` : f.motivo ? `<p>Motivo: ${esc(f.motivo)}</p>` : ""}
-  </div>`; }).join("") : `${tito("hseq", "Tito", "sm")}<p class="muted" style="text-align:center">${tab === "fotos" ? "No hay fotos pendientes." : "Aún no has revisado fotos."}</p>`}</section>`;
+  </div>`; }).join("") : `${tito("hseq", "Tito", "sm")}<p class="muted" style="text-align:center">${tab === "fotos" ? "No hay nada pendiente por revisar." : "Aún no has revisado nada."}</p>`}</section>`;
   pane.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
     b.disabled = true; const f = lista.find(x => x.id === b.dataset.ok); const a = FOTOS.find(x => x.id === f.actividad);
     const actual = await DB.get("fotos", f.id); if (actual.estado !== "pendiente") return hseq(tab);
@@ -464,7 +494,7 @@ async function hseq(tab = "fotos") {
   });
   pane.querySelectorAll("[data-no]").forEach(b => b.onclick = () => {
     const box = $("#r-" + CSS.escape(b.dataset.no));
-    box.innerHTML = `<label for="mo">Motivo del rechazo (lo verá el trabajador)</label><input id="mo" maxlength="120" placeholder="Ej.: no se ve el mensaje de la familia"><div class="row" style="margin-top:8px"><button class="btn no sm" id="cr">Confirmar rechazo</button></div>`;
+    box.innerHTML = `<label for="mo">Motivo del rechazo (lo verá el trabajador)</label><input id="mo" maxlength="120" placeholder="Ej.: no se ve el mensaje / el compromiso no es concreto"><div class="row" style="margin-top:8px"><button class="btn no sm" id="cr">Confirmar rechazo</button></div>`;
     $("#cr").onclick = async () => { const mo = $("#mo").value.trim(); if (!mo) return; await DB.update("fotos", b.dataset.no, { estado: "rechazada", motivo: mo, revisado: ahora() }); hseq(tab); };
   });
 }
@@ -485,7 +515,7 @@ async function admin(tab = "resumen") {
   pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
     <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.filter(valido).length}</div>participantes</div>
     <div class="card"><div class="estrellas" style="color:var(--rojo)">${ints.filter(x => x.estado === "terminado").length}</div>misiones completadas</div>
-    <div class="card"><div class="estrellas" style="color:var(--rojo)">${fotos.filter(x => x.estado === "pendiente").length}</div>fotos pendientes</div></div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${fotos.filter(x => x.estado === "pendiente").length}</div>por revisar (fotos y compromisos)</div></div>
   <section class="card"><h2>Avance por centro</h2><table><thead><tr><th>Centro</th><th>Participantes</th><th>Misiones</th><th>Fotos pendientes</th><th>Estrellas</th></tr></thead><tbody>
   ${filas.map(f => `<tr><td>${esc(f.c.nombre)}${f.c.prueba ? ` <span class="tag lock">prueba</span>` : ""}<br><small class="muted">${esc(f.c.region || "")}</small></td><td>${f.part}</td><td>${f.mis}</td><td>${f.pend ? `<span class="tag pend">${f.pend}</span>` : "0"}</td><td><b>${f.est}</b></td></tr>`).join("") || `<tr><td colspan="5" class="muted">Crea los centros en la pestaña Centros.</td></tr>`}
   </tbody></table><div class="row" style="margin-top:12px"><button class="btn oro" id="csv">Descargar participantes (CSV)</button></div></section>`;
@@ -547,7 +577,7 @@ function admConfig(pane) {
   <label class="check" style="margin-top:14px"><input type="checkbox" id="pr" ${CFG.pruebas ? "checked" : ""}> Modo pruebas: abre todas las misiones y actividades sin importar la fecha. Desactívalo antes del 1 de diciembre.</label>
   <div id="m"></div><div class="row" style="margin-top:12px"><button class="btn pri" id="g">Guardar</button></div>
   <h3>Calendario de misiones</h3><table><thead><tr><th>Misión o actividad</th><th>Abre</th><th>Estrellas máx.</th></tr></thead><tbody>
-  ${[...MISIONES.map(m => [m.titulo, m.abre, maxMision(m)]), ...FOTOS.map(a => [a.titulo + " (foto, hasta " + fmtF(a.cierra) + ")", a.abre, a.estrellas])].sort((a, b) => a[1].localeCompare(b[1])).map(r => `<tr><td>${esc(r[0])}</td><td>${fmtF(r[1])}</td><td>${r[2]}</td></tr>`).join("")}
+  ${[...MISIONES.map(m => [m.titulo, m.abre, maxMision(m)]), ...FOTOS.map(a => [a.titulo + (a.tipo === "texto" ? " (texto" : " (foto") + ", hasta " + fmtF(a.cierra) + ")", a.abre, a.estrellas])].sort((a, b) => a[1].localeCompare(b[1])).map(r => `<tr><td>${esc(r[0])}</td><td>${fmtF(r[1])}</td><td>${r[2]}</td></tr>`).join("")}
   </tbody></table></section>`;
   $("#g").onclick = async () => { await DB.update("config", "app", { inicio: $("#i").value, fin: $("#f").value, pruebas: $("#pr").checked }); await cargarBase(); msg($("#m"), "Guardado.", "okb"); };
 }
