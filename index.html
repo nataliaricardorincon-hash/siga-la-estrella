@@ -219,6 +219,7 @@ async function inicio() {
     const pid = await sha(c, "anava-ced:");
     const p = await DB.get("participantes", pid);
     if (p) { S.pid = pid; LS.set("sle-pid", pid); return panel(p); }
+    if (CFG.lista && !(await DB.get("habilitados", pid))) return msg($("#m"), "Tu cédula no aparece en el listado de personal directo de ANAVA. Revisa el número y, si eres trabajador directo, habla con el HSEQ de tu centro.");
     registro(pid, c.slice(-4));
   };
   $("#bRank").onclick = ranking; $("#bHseq").onclick = () => login("hseq"); $("#bAdm").onclick = () => login("admin");
@@ -500,12 +501,13 @@ async function hseq(tab = "fotos") {
 }
 
 async function admin(tab = "resumen") {
-  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["config", "Fechas y pruebas"]], tab));
+  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["personal", "Personal directo"], ["config", "Fechas y pruebas"]], tab));
   $("#salir").onclick = () => { S.rol = null; inicio(); };
   app.querySelectorAll(".tabs button").forEach(b => b.onclick = () => admin(b.dataset.t));
   const pane = $("#pane");
   if (tab === "centros") return admCentros(pane);
   if (tab === "config") return admConfig(pane);
+  if (tab === "personal") return admPersonal(pane);
   const [ps, fotos, ints] = await Promise.all([DB.all("participantes"), DB.all("fotos"), DB.all("intentos")]);
   if (tab === "ganadores") return admGanadores(pane, ps);
   const filas = Object.values(CENTROS).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(c => {
@@ -570,6 +572,62 @@ async function admCentros(pane) {
     box.innerHTML = `<div class="row" style="margin-top:6px"><span class="muted" style="font-size:13px">¿Eliminar? Sus participantes quedarán sin centro.</span><button class="btn no sm" id="cd">Sí, eliminar</button></div>`;
     $("#cd").onclick = async () => { await DB.del("centros", b.dataset.del); await cargarBase(); admin("centros"); };
   });
+}
+/* Listado de personal directo: solo se guarda la cédula cifrada (misma clave del registro) y sus últimos 4 números. */
+function leerCedulas(txt) {
+  const out = new Set();
+  for (const linea of txt.split(/\r?\n/)) {
+    const celda = linea.split(/[\t;,]/)[0] || "";
+    const c = celda.replace(/\D/g, "");
+    if (c.length >= 6 && c.length <= 11) out.add(c);
+  }
+  return [...out];
+}
+async function admPersonal(pane) {
+  const [hab, ps] = await Promise.all([DB.all("habilitados"), DB.all("participantes")]);
+  const H = new Set(hab.map(h => h.id));
+  const fuera = ps.filter(p => !H.has(p.id));
+  pane.innerHTML = `<section class="card"><h2>Personal directo de ANAVA</h2>
+  <p>Solo pueden registrarse las cédulas de este listado. Las cédulas se guardan cifradas: nadie puede leerlas, solo se ven los últimos 4 números.</p>
+  <div class="grid2"><div class="card" style="background:#FCFCFC;text-align:center"><div class="estrellas" style="color:var(--azul,#0F2254)">${hab.length}</div>cédulas habilitadas</div>
+  <div class="card" style="background:#FCFCFC;text-align:center"><div class="estrellas" style="color:${CFG.lista ? "#1E8A3E" : "var(--rojo)"}">${CFG.lista ? "Activo" : "Inactivo"}</div>control de registro</div></div>
+  <label class="check"><input type="checkbox" id="act" ${CFG.lista ? "checked" : ""}> Exigir que la cédula esté en el listado para registrarse</label>
+  <h3>Cargar cédulas</h3>
+  <p class="muted" style="font-size:13px">Copia de Excel la columna de cédulas (o la tabla con la cédula en la primera columna) y pégala aquí. También puedes subir un archivo .csv o .txt. Se ignoran encabezados, puntos y espacios.</p>
+  <textarea id="tx" rows="8" style="width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid #ccc" placeholder="1047123456&#10;73123456&#10;..."></textarea>
+  <input id="fi" type="file" accept=".csv,.txt,text/plain,text/csv" style="margin-top:8px">
+  <label class="check"><input type="checkbox" id="rep"> Reemplazar el listado completo (quita las cédulas que ya no estén, por ejemplo retiros)</label>
+  <div id="m"></div><div class="row" style="margin-top:12px"><button class="btn pri" id="cargar">Cargar listado</button></div>
+  <h3>Quitar una cédula</h3>
+  <div class="row"><input id="qc" inputmode="numeric" placeholder="Número de cédula" style="max-width:220px"><button class="btn no sm" id="quitar">Quitar</button></div><div id="mq"></div>
+  ${fuera.length ? `<h3>Registrados que no están en el listado (${fuera.length})</h3><p class="muted" style="font-size:13px">Se registraron antes de cargar el listado o con una cédula que ya se quitó. Revisa si son personal directo.</p>
+  <table><thead><tr><th>Nombre</th><th>Centro</th><th>Cédula</th></tr></thead><tbody>${fuera.map(x => `<tr><td>${esc(x.nombre)}</td><td>${esc(CENTROS[x.centroId]?.nombre || "")}</td><td>…${esc(x.cedula4)}</td></tr>`).join("")}</tbody></table>` : ""}
+  </section>`;
+  $("#act").onchange = async (e) => { await DB.update("config", "app", { lista: e.target.checked }); await cargarBase(); admin("personal"); };
+  $("#fi").onchange = async (e) => { const f = e.target.files[0]; if (f) $("#tx").value = await f.text(); };
+  $("#cargar").onclick = async () => {
+    const lista = leerCedulas($("#tx").value);
+    if (!lista.length) return msg($("#m"), "No encontré cédulas válidas (de 6 a 11 números).");
+    $("#cargar").disabled = true;
+    try {
+      const nuevos = new Set();
+      for (let i = 0; i < lista.length; i += 25) {
+        await Promise.all(lista.slice(i, i + 25).map(async c => { const h = await sha(c, "anava-ced:"); nuevos.add(h); if (!H.has(h)) await DB.set("habilitados", h, { c4: c.slice(-4), ts: ahora() }); }));
+        msg($("#m"), `Cargando… ${Math.min(i + 25, lista.length)} de ${lista.length}`, "okb");
+      }
+      let quitadas = 0;
+      if ($("#rep").checked) { const sobran = hab.filter(h => !nuevos.has(h.id)); for (const h of sobran) await DB.del("habilitados", h.id); quitadas = sobran.length; }
+      if (!CFG.lista) { await DB.update("config", "app", { lista: true }); await cargarBase(); }
+      await admin("personal");
+      msg($("#m"), `Listo: ${lista.length} cédulas en el listado${quitadas ? `, ${quitadas} quitadas` : ""}. El control de registro quedó activo.`, "okb");
+    } catch (err) { console.error(err); $("#cargar").disabled = false; msg($("#m"), "No se pudo cargar. Revisa tu conexión e intenta otra vez."); }
+  };
+  $("#quitar").onclick = async () => {
+    const c = $("#qc").value.replace(/\D/g, ""); if (c.length < 6) return msg($("#mq"), "Escribe la cédula completa.");
+    const h = await sha(c, "anava-ced:");
+    if (!H.has(h)) return msg($("#mq"), "Esa cédula no está en el listado.");
+    await DB.del("habilitados", h); await admin("personal"); msg($("#mq"), "Cédula quitada del listado.", "okb");
+  };
 }
 function admConfig(pane) {
   pane.innerHTML = `<section class="card"><h2>Fechas de la campaña</h2>
