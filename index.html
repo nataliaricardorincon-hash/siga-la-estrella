@@ -576,7 +576,7 @@ async function hseq(tab = "fotos") {
 }
 
 async function admin(tab = "resumen") {
-  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["personal", "Personal directo"], ["opiniones", "Opiniones"], ["config", "Fechas y pruebas"]], tab));
+  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["envios", "Fotos y compromisos"], ["personal", "Personal directo"], ["opiniones", "Opiniones"], ["config", "Fechas y pruebas"]], tab));
   $("#salir").onclick = () => { S.rol = null; inicio(); };
   app.querySelectorAll(".tabs button").forEach(b => b.onclick = () => admin(b.dataset.t));
   const pane = $("#pane");
@@ -584,6 +584,7 @@ async function admin(tab = "resumen") {
   if (tab === "config") return admConfig(pane);
   if (tab === "personal") return admPersonal(pane);
   if (tab === "opiniones") return admOpiniones(pane);
+  if (tab === "envios") return admEnvios(pane);
   const [ps, fotos, ints] = await Promise.all([DB.all("participantes"), DB.all("fotos"), DB.all("intentos")]);
   if (tab === "ganadores") return admGanadores(pane, ps);
   const filas = Object.values(CENTROS).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(c => {
@@ -675,6 +676,36 @@ async function admCentros(pane) {
     box.innerHTML = `<div class="row" style="margin-top:6px"><span class="muted" style="font-size:13px">¿Eliminar? Sus participantes quedarán sin centro.</span><button class="btn no sm" id="cd">Sí, eliminar</button></div>`;
     $("#cd").onclick = async () => { await DB.del("centros", b.dataset.del); await cargarBase(); admin("centros"); };
   });
+}
+async function admEnvios(pane, f = { estado: "pendiente", act: "", centro: "", n: 30 }, cache) {
+  const todos = cache || (await DB.all("fotos")).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const EST = { pendiente: ["Sin validar", "pend"], aprobada: ["Aprobada", "val"], rechazada: ["Rechazada", "rec"] };
+  const cuenta = (e) => todos.filter(x => x.estado === e).length;
+  const lista = todos.filter(x => (!f.estado || x.estado === f.estado) && (!f.act || x.actividad === f.act) && (!f.centro || x.centroId === f.centro));
+  const fecha = (t) => t ? new Date(t).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
+  pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
+    <div class="card"><div class="estrellas" style="color:var(--warn)">${cuenta("pendiente")}</div>sin validar</div>
+    <div class="card"><div class="estrellas" style="color:var(--ok)">${cuenta("aprobada")}</div>aprobados</div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${cuenta("rechazada")}</div>rechazados</div></div>
+  <section class="card"><h2>Fotos y compromisos (${lista.length})</h2>
+  <p class="muted" style="font-size:13px;margin-top:0">Solo consulta: la aprobación la hace el HSEQ de cada centro. El mensaje de la familia es privado: no lo descargues ni lo compartas.</p>
+  <div class="grid2"><div><label for="fe">Estado</label><select id="fe"><option value="">Todos</option>${Object.entries(EST).map(([k, v]) => `<option value="${k}" ${f.estado === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
+  <div><label for="fa">Actividad</label><select id="fa"><option value="">Todas</option>${FOTOS.map(a => `<option value="${a.id}" ${f.act === a.id ? "selected" : ""}>${esc(a.titulo)}</option>`).join("")}</select></div>
+  <div><label for="fc">Centro</label><select id="fc"><option value="">Todos</option>${Object.values(CENTROS).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(c => `<option value="${esc(c.id)}" ${f.centro === c.id ? "selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></div></div>
+  ${lista.slice(0, f.n).map(x => { const a = FOTOS.find(y => y.id === x.actividad); const e = EST[x.estado] || [x.estado, "lock"]; return `<div class="card" style="background:#FCFCFC;margin:12px 0 0">
+    <div class="row" style="justify-content:space-between"><b>${esc(a?.titulo || x.actividad)}</b><span class="tag ${e[1]}">${e[0]}</span></div>
+    <small class="muted">${esc(x.nombre)} · ${esc(CENTROS[x.centroId]?.nombre || "Sin centro")} · enviado ${fecha(x.ts)}${x.revisado ? ` · revisado ${fecha(x.revisado)}` : ""}</small>
+    ${x.foto ? `<img class="foto" loading="lazy" src="${x.foto}" alt="Foto enviada por ${esc(x.nombre)}">` : ""}${x.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(x.texto)}»</blockquote>` : ""}
+    ${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo del rechazo:</b> ${esc(x.motivo)}</small>` : ""}</div>`; }).join("") || `<p class="muted">No hay envíos con estos filtros.</p>`}
+  ${lista.length > f.n ? `<div class="row" style="margin-top:12px"><button class="btn sec" id="mas">Ver más (${lista.length - f.n} restantes)</button></div>` : ""}
+  <div class="row" style="margin-top:12px"><button class="btn oro" id="dle">Descargar listado (CSV, sin fotos)</button></div></section>`;
+  const re = (cambio) => admEnvios(pane, { ...f, n: 30, ...cambio }, todos);
+  $("#fe").onchange = () => re({ estado: $("#fe").value });
+  $("#fa").onchange = () => re({ act: $("#fa").value });
+  $("#fc").onchange = () => re({ centro: $("#fc").value });
+  if ($("#mas")) $("#mas").onclick = () => admEnvios(pane, { ...f, n: f.n + 30 }, todos);
+  $("#dle").onclick = () => csv("fotos-y-compromisos.csv", ["Enviado", "Actividad", "Nombre", "Centro", "Región", "Estado", "Revisado", "Motivo rechazo", "Compromiso (texto)"],
+    lista.map(x => [fecha(x.ts), FOTOS.find(y => y.id === x.actividad)?.titulo || x.actividad, x.nombre, CENTROS[x.centroId]?.nombre || "", CENTROS[x.centroId]?.region || "", (EST[x.estado] || [x.estado])[0], fecha(x.revisado), x.motivo || "", x.texto || ""]));
 }
 async function admOpiniones(pane, filtro = { tipo: "", centro: "" }) {
   const ops = (await DB.all("opiniones")).sort((a, b) => (b.ts || 0) - (a.ts || 0));
