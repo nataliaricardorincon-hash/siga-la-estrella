@@ -44,6 +44,9 @@ input:focus,select:focus,textarea:focus{outline:3px solid var(--oro2);border-col
 .check{display:flex;gap:10px;align-items:flex-start;font-weight:500;font-size:13px;line-height:1.4}
 .check input{width:22px;height:22px;flex:none;margin-top:2px}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.caras{display:flex;gap:6px;justify-content:space-between;margin:6px 0 4px}.caras button{flex:1;font-size:30px;padding:8px 0;border:2px solid var(--borde);background:#fff;border-radius:12px;cursor:pointer}.caras button[aria-pressed="true"]{border-color:var(--navy);background:#EEF2FB}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{border:2px solid var(--navy);background:#fff;color:var(--navy);border-radius:999px;padding:7px 12px;font:700 14px Montserrat,sans-serif;cursor:pointer}.chips button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.opina textarea{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid #ccc}
 .tabs button{border:2px solid var(--navy);background:#fff;color:var(--navy);border-radius:999px;padding:8px 14px;font:700 14px Montserrat,sans-serif;cursor:pointer}
 .tabs button[aria-pressed="true"]{background:var(--navy);color:#fff}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -123,6 +126,12 @@ const FOTOS = [
 ];
 const PREG = 5, SEG = 30;
 const FASES = ["Velitas", "Navidad", "Año Nuevo", "Reyes"];
+/* Opiniones: después de cada misión, en cualquier momento, y encuesta de cierre. */
+const OPINA = { finalAbre: "2027-01-06T00:00", finalCierra: "2027-01-20T23:59" };
+const TIPOS_OP = ["Sugerencia", "Mejora", "Queja", "Felicitación"];
+const CARAS = ["😞", "🙁", "😐", "🙂", "😄"];
+const PREG_FINAL = ["¿Te gustaron las misiones y actividades?", "¿Las preguntas fueron fáciles de entender?", "¿La campaña te ayudó a trabajar más seguro?"];
+const finalAbierta = () => CFG && (CFG.pruebas || (ahora() >= Date.parse(OPINA.finalAbre) && ahora() <= Date.parse(OPINA.finalCierra)));
 /* ================================================== */
 
 const DEMO = !firebaseConfig.apiKey || firebaseConfig.apiKey === "PEGAR_AQUI";
@@ -278,11 +287,63 @@ async function panel(p) {
   ${FASES.map(f => `<div class="fase">${f}</div>${MISIONES.filter(m => m.fase === f).map(m => item(m, "m")).join("")}${FOTOS.filter(x => x.fase === f).map(x => item(x, "f")).join("")}`).join("")}
   <p class="muted" style="font-size:13px">Cada misión tiene ${PREG} preguntas. Tienes ${SEG} segundos para cada una y una sola oportunidad. Ganas 1 estrella por cada respuesta buena y 1 más si las aciertas todas. La gran final da el doble.</p>
   </section>
+  ${finalAbierta() && !LS.get("sle-final-" + p.id) ? `<section class="card" style="border:2px solid var(--oro)"><h2>📝 Encuesta de cierre</h2><p style="margin-top:0">¿Cómo te pareció la campaña? Son 3 preguntas y te toma 1 minuto.</p><button class="btn pri" id="bFin">Responder encuesta</button></section>` : ""}
+  <section class="card"><h2>💬 Tu opinión cuenta</h2><p style="margin-top:0">Sugerencias, mejoras, quejas o felicitaciones sobre la campaña. Puedes enviarla sin tu nombre.</p><button class="btn sec" id="bOp">Dar mi opinión</button></section>
   <div class="row"><button class="btn sec" id="bRank">Ver ranking</button><button class="btn sec" id="salir">No soy ${esc(corto(p.nombre))}</button></div>`);
+  $("#bOp").onclick = () => opinarGeneral(p);
+  if ($("#bFin")) $("#bFin").onclick = () => encuestaFinal(p);
   app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => trivia(p, MISIONES.find(m => m.id === b.dataset.m)));
   app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => subirFoto(p, FOTOS.find(x => x.id === b.dataset.f)));
   $("#bRank").onclick = ranking;
   $("#salir").onclick = () => { S.pid = null; LS.del("sle-pid"); inicio(); };
+}
+
+/* ---------- Opiniones ---------- */
+const caras = (id) => `<div class="caras" id="${id}" role="group">${CARAS.map((c, i) => `<button type="button" data-v="${i + 1}" aria-pressed="false" aria-label="${i + 1} de 5">${c}</button>`).join("")}</div><div class="row muted" style="justify-content:space-between;font-size:12px"><span>Nada</span><span>Mucho</span></div>`;
+function activarCaras(id) { const g = $("#" + id); g.querySelectorAll("button").forEach(b => b.onclick = () => { g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", "true"); g.dataset.v = b.dataset.v; }); }
+const valorCaras = (id) => +($("#" + id).dataset.v || 0) || null;
+const conNombre = () => `<label class="check"><input type="checkbox" id="cn"> Enviar con mi nombre (si no lo marcas, tu opinión llega sin nombre)</label>`;
+async function guardarOpinion(p, ctx, datos, unico) {
+  const firmado = $("#cn")?.checked;
+  const id = unico ? await sha(p.id + ctx, "anava-op:") : rid(12);
+  await DB.set("opiniones", id, { contexto: ctx, centroId: p.centroId, nombre: firmado ? p.nombre : "", tipo: "", calif: null, r1: null, r2: null, r3: null, texto: "", gusto: "", mejora: "", ts: ahora(), ...datos });
+}
+function opinarGeneral(p) {
+  view(`<section class="card opina"><h1>Tu opinión cuenta</h1><p>Cuéntanos qué mejorarías, qué no te gustó o qué te gustó de la campaña. Lo leemos todo para diseñar mejor las próximas.</p>
+  <label>¿Qué nos quieres decir?</label><div class="chips" id="tp">${TIPOS_OP.map(t => `<button type="button" aria-pressed="false" data-t="${t}">${t}</button>`).join("")}</div>
+  <label for="tx">Escríbelo aquí</label><textarea id="tx" rows="5" maxlength="500" placeholder="Ej.: Las preguntas de la misión 3 estaban muy largas"></textarea>
+  ${conNombre()}<div id="m"></div><div class="row" style="margin-top:12px"><button class="btn pri" id="env">Enviar</button><button class="btn sec" id="vol">Volver</button></div></section>`);
+  let tipo = "";
+  $("#tp").querySelectorAll("button").forEach(b => b.onclick = () => { $("#tp").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", "true"); tipo = b.dataset.t; });
+  $("#vol").onclick = () => panel(p);
+  $("#env").onclick = async () => {
+    const t = $("#tx").value.trim();
+    if (!tipo) return msg($("#m"), "Elige si es sugerencia, mejora, queja o felicitación.");
+    if (t.length < 5) return msg($("#m"), "Escribe tu opinión.");
+    $("#env").disabled = true;
+    try { await guardarOpinion(p, "general", { tipo, texto: t }, false); gracias(p); }
+    catch { $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Revisa tu conexión."); }
+  };
+}
+async function encuestaFinal(p) {
+  view(`<section class="card opina"><h1>Encuesta de cierre</h1><p>3 preguntas rápidas y dos comentarios. Nos ayudan a mejorar la campaña del próximo año.</p>
+  ${PREG_FINAL.map((q, i) => `<h3>${i + 1}. ${esc(q)}</h3>${caras("r" + (i + 1))}`).join("")}
+  <label for="gu">¿Qué fue lo que más te gustó?</label><textarea id="gu" rows="3" maxlength="400"></textarea>
+  <label for="me">¿Qué mejorarías para la próxima campaña?</label><textarea id="me" rows="3" maxlength="400"></textarea>
+  ${conNombre()}<div id="m"></div><div class="row" style="margin-top:12px"><button class="btn pri" id="env">Enviar encuesta</button><button class="btn sec" id="vol">Volver</button></div></section>`);
+  [1, 2, 3].forEach(i => activarCaras("r" + i));
+  $("#vol").onclick = () => panel(p);
+  $("#env").onclick = async () => {
+    const r = [1, 2, 3].map(i => valorCaras("r" + i));
+    if (r.some(x => !x)) return msg($("#m"), "Responde las 3 preguntas tocando una carita.");
+    $("#env").disabled = true;
+    try { await guardarOpinion(p, "final", { r1: r[0], r2: r[1], r3: r[2], gusto: $("#gu").value.trim(), mejora: $("#me").value.trim() }, true); LS.set("sle-final-" + p.id, "1"); gracias(p); }
+    catch { $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Es posible que ya hayas respondido la encuesta."); }
+  };
+}
+function gracias(p) {
+  view(`<section class="card hero">${tito("enviado", "Tito con el pulgar arriba")}<h1>¡Gracias por tu opinión!</h1><p>La leeremos para mejorar las próximas campañas.</p></section><button class="btn pri full" id="vol">Volver a mis misiones</button>`);
+  $("#vol").onclick = async () => panel(await DB.get("participantes", p.id));
 }
 
 /* ---------- Trivia ---------- */
@@ -353,8 +414,22 @@ async function terminar(p, m, iid, it) {
     <h1>${it.correctas === it.qs.length ? "¡Misión perfecta!" : "¡Misión completada!"}</h1>
     <p>${it.correctas} de ${it.qs.length} respuestas correctas</p>
     <div class="estrellas">+${it.estrellas} ⭐</div><p>Ahora tienes <b>${pp.estrellas} estrellas</b></p></section>
+    ${LS.get("sle-op-" + iid) ? "" : `<section class="card opina" id="opM"><h2>¿Qué te pareció esta misión?</h2>${caras("cm")}
+    <label for="cx">¿Algo que mejorar? (opcional)</label><textarea id="cx" rows="2" maxlength="300" placeholder="Ej.: una pregunta no se entendía"></textarea>
+    ${conNombre()}<div id="m"></div><div class="row" style="margin-top:10px"><button class="btn sec" id="envM">Enviar opinión</button></div></section>`}
     <button class="btn pri full" id="vol">Volver a mis misiones</button>`);
   $("#vol").onclick = () => panel(pp);
+  if ($("#envM")) {
+    activarCaras("cm");
+    $("#envM").onclick = async () => {
+      const c = valorCaras("cm"), t = $("#cx").value.trim();
+      if (!c && !t) return msg($("#m"), "Toca una carita o escribe un comentario.");
+      $("#envM").disabled = true;
+      try { await guardarOpinion(pp, "mision:" + m.id, { calif: c, texto: t }, true); } catch {}
+      LS.set("sle-op-" + iid, "1");
+      $("#opM").innerHTML = `<p style="margin:0;font-weight:700;color:var(--ok)">¡Gracias! Tu opinión nos ayuda a mejorar.</p>`;
+    };
+  }
 }
 
 /* ---------- Foto ---------- */
@@ -501,13 +576,14 @@ async function hseq(tab = "fotos") {
 }
 
 async function admin(tab = "resumen") {
-  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["personal", "Personal directo"], ["config", "Fechas y pruebas"]], tab));
+  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["personal", "Personal directo"], ["opiniones", "Opiniones"], ["config", "Fechas y pruebas"]], tab));
   $("#salir").onclick = () => { S.rol = null; inicio(); };
   app.querySelectorAll(".tabs button").forEach(b => b.onclick = () => admin(b.dataset.t));
   const pane = $("#pane");
   if (tab === "centros") return admCentros(pane);
   if (tab === "config") return admConfig(pane);
   if (tab === "personal") return admPersonal(pane);
+  if (tab === "opiniones") return admOpiniones(pane);
   const [ps, fotos, ints] = await Promise.all([DB.all("participantes"), DB.all("fotos"), DB.all("intentos")]);
   if (tab === "ganadores") return admGanadores(pane, ps);
   const filas = Object.values(CENTROS).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(c => {
@@ -599,6 +675,32 @@ async function admCentros(pane) {
     box.innerHTML = `<div class="row" style="margin-top:6px"><span class="muted" style="font-size:13px">¿Eliminar? Sus participantes quedarán sin centro.</span><button class="btn no sm" id="cd">Sí, eliminar</button></div>`;
     $("#cd").onclick = async () => { await DB.del("centros", b.dataset.del); await cargarBase(); admin("centros"); };
   });
+}
+async function admOpiniones(pane, filtro = { tipo: "", centro: "" }) {
+  const ops = (await DB.all("opiniones")).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const prom = (xs) => xs.length ? (xs.reduce((s, x) => s + x, 0) / xs.length).toFixed(1) : "—";
+  const gen = ops.filter(o => o.contexto === "general"), fin = ops.filter(o => o.contexto === "final");
+  const porMision = MISIONES.map(m => { const xs = ops.filter(o => o.contexto === "mision:" + m.id); return { m, n: xs.length, p: prom(xs.map(o => o.calif).filter(Boolean)), c: xs.filter(o => o.texto).length }; });
+  const ctxNom = (c) => c === "general" ? "Opinión libre" : c === "final" ? "Encuesta de cierre" : (MISIONES.find(m => "mision:" + m.id === c)?.titulo || c);
+  const lista = ops.filter(o => (o.texto || o.gusto || o.mejora) && (!filtro.tipo || (filtro.tipo === "Misiones" ? o.contexto.startsWith("mision:") : filtro.tipo === "Encuesta" ? o.contexto === "final" : o.tipo === filtro.tipo)) && (!filtro.centro || o.centroId === filtro.centro));
+  pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ops.length}</div>opiniones recibidas</div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${fin.length}</div>encuestas de cierre</div></div>
+  <section class="card"><h2>Opiniones libres por tipo</h2><table><thead><tr>${TIPOS_OP.map(t => `<th>${t}</th>`).join("")}</tr></thead><tbody><tr>${TIPOS_OP.map(t => `<td><b>${gen.filter(o => o.tipo === t).length}</b></td>`).join("")}</tr></tbody></table></section>
+  <section class="card"><h2>Calificación de cada misión (1 a 5)</h2><table><thead><tr><th>Misión</th><th>Respuestas</th><th>Promedio</th><th>Comentarios</th></tr></thead><tbody>${porMision.map(x => `<tr><td>${esc(x.m.titulo)}</td><td>${x.n}</td><td><b>${x.p}</b></td><td>${x.c}</td></tr>`).join("")}</tbody></table></section>
+  <section class="card"><h2>Encuesta de cierre (1 a 5)</h2><table><thead><tr><th>Pregunta</th><th>Promedio</th></tr></thead><tbody>${PREG_FINAL.map((q, i) => `<tr><td>${esc(q)}</td><td><b>${prom(fin.map(o => o["r" + (i + 1)]).filter(Boolean))}</b></td></tr>`).join("")}</tbody></table></section>
+  <section class="card"><h2>Comentarios (${lista.length})</h2>
+  <div class="grid2"><div><label for="ft">Tipo</label><select id="ft"><option value="">Todos</option>${[...TIPOS_OP, "Misiones", "Encuesta"].map(t => `<option ${filtro.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+  <div><label for="fc">Centro</label><select id="fc"><option value="">Todos</option>${Object.values(CENTROS).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(c => `<option value="${esc(c.id)}" ${filtro.centro === c.id ? "selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></div></div>
+  ${lista.slice(0, 200).map(o => `<div class="card" style="background:#FCFCFC;margin:10px 0 0"><div class="row" style="justify-content:space-between"><b>${esc(o.tipo || ctxNom(o.contexto))}</b><small class="muted">${esc(CENTROS[o.centroId]?.nombre || "")} · ${new Date(o.ts).toLocaleDateString("es-CO")}</small></div>
+    ${o.tipo ? `<small class="muted">${esc(ctxNom(o.contexto))}</small>` : o.calif ? `<small>${CARAS[o.calif - 1]} ${o.calif}/5</small>` : ""}
+    ${o.texto ? `<p style="margin:6px 0 0">${esc(o.texto)}</p>` : ""}${o.gusto ? `<p style="margin:6px 0 0"><b>Le gustó:</b> ${esc(o.gusto)}</p>` : ""}${o.mejora ? `<p style="margin:6px 0 0"><b>Mejoraría:</b> ${esc(o.mejora)}</p>` : ""}
+    <small class="muted">${o.nombre ? esc(o.nombre) : "Sin nombre"}</small></div>`).join("") || `<p class="muted">Aún no hay comentarios.</p>`}
+  <div class="row" style="margin-top:12px"><button class="btn oro" id="dlo">Descargar todas las opiniones (CSV)</button></div></section>`;
+  $("#ft").onchange = () => admOpiniones(pane, { ...filtro, tipo: $("#ft").value });
+  $("#fc").onchange = () => admOpiniones(pane, { ...filtro, centro: $("#fc").value });
+  $("#dlo").onclick = () => csv("opiniones-siga-la-estrella.csv", ["Fecha", "Origen", "Tipo", "Centro", "Región", "Calificación misión", ...PREG_FINAL, "Comentario", "Lo que más le gustó", "Qué mejoraría", "Nombre"],
+    ops.map(o => [new Date(o.ts).toLocaleString("es-CO"), ctxNom(o.contexto), o.tipo, CENTROS[o.centroId]?.nombre || "", CENTROS[o.centroId]?.region || "", o.calif ?? "", o.r1 ?? "", o.r2 ?? "", o.r3 ?? "", o.texto, o.gusto, o.mejora, o.nombre || "Sin nombre"]));
 }
 /* Listado de personal directo: solo se guarda la cédula cifrada (misma clave del registro) y sus últimos 4 números. */
 function leerCedulas(txt) {
