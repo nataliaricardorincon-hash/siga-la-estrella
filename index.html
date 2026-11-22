@@ -576,7 +576,7 @@ async function hseq(tab = "fotos") {
 }
 
 async function admin(tab = "resumen") {
-  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["envios", "Fotos y compromisos"], ["personal", "Personal directo"], ["opiniones", "Opiniones"], ["config", "Fechas y pruebas"]], tab));
+  view(encabezado("Administración nacional", "¡Siga la estrella! · todos los centros", [["resumen", "Resumen"], ["ranking", "Ranking"], ["ganadores", "Ganadores"], ["centros", "Centros"], ["envios", "Fotos y compromisos"], ["personal", "Personal directo"], ["opiniones", "Opiniones"], ["config", "Fechas y pruebas"]], tab));
   $("#salir").onclick = () => { S.rol = null; inicio(); };
   app.querySelectorAll(".tabs button").forEach(b => b.onclick = () => admin(b.dataset.t));
   const pane = $("#pane");
@@ -585,6 +585,7 @@ async function admin(tab = "resumen") {
   if (tab === "personal") return admPersonal(pane);
   if (tab === "opiniones") return admOpiniones(pane);
   if (tab === "envios") return admEnvios(pane);
+  if (tab === "ranking") return admRanking(pane);
   const [ps, fotos, ints] = await Promise.all([DB.all("participantes"), DB.all("fotos"), DB.all("intentos")]);
   if (tab === "ganadores") return admGanadores(pane, ps);
   const filas = Object.values(CENTROS).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(c => {
@@ -676,6 +677,42 @@ async function admCentros(pane) {
     box.innerHTML = `<div class="row" style="margin-top:6px"><span class="muted" style="font-size:13px">¿Eliminar? Sus participantes quedarán sin centro.</span><button class="btn no sm" id="cd">Sí, eliminar</button></div>`;
     $("#cd").onclick = async () => { await DB.del("centros", b.dataset.del); await cargarBase(); admin("centros"); };
   });
+}
+async function admRanking(pane, f = { reg: "", n: 50 }, cache) {
+  const [ps0, ints0] = cache || await Promise.all([DB.all("participantes"), DB.all("intentos")]);
+  const enReg = (cid) => !f.reg || CENTROS[cid]?.region === f.reg;
+  const ps = ps0.filter(valido).filter(p => enReg(p.centroId)).sort(ordenRank);
+  const fin = ints0.filter(x => x.estado === "terminado");
+  const centros = Object.values(CENTROS).filter(c => !c.prueba && enReg(c.id)).map(c => {
+    const pc = ps.filter(p => p.centroId === c.id), est = pc.reduce((s, p) => s + (p.estrellas || 0), 0);
+    return { c, n: pc.length, est, prom: pc.length ? est / pc.length : 0, mis: fin.filter(x => x.centroId === c.id).length, lider: pc[0] };
+  }).sort((a, b) => b.prom - a.prom || b.n - a.n || a.c.nombre.localeCompare(b.c.nombre));
+  const maxProm = Math.max(1, ...centros.map(x => x.prom));
+  const regs = [...new Set(Object.values(CENTROS).filter(c => !c.prueba).map(c => c.region))].filter(Boolean).sort();
+  const medalla = (i) => ["🥇", "🥈", "🥉"][i] || i + 1;
+  pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.length}</div>participantes</div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${centros.filter(x => x.n).length} / ${centros.length}</div>centros participando</div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.reduce((s, p) => s + (p.estrellas || 0), 0)}</div>estrellas en total</div></div>
+  <section class="card"><div class="row" style="justify-content:space-between;align-items:flex-end"><h2 style="margin:0">Ranking por centro de trabajo</h2>
+  <div><label for="fr">Región</label><select id="fr"><option value="">Nacional</option>${regs.map(r => `<option ${f.reg === r ? "selected" : ""}>${esc(r)}</option>`).join("")}</select></div></div>
+  <p class="muted" style="font-size:13px">Ordenado por promedio de estrellas por participante, para comparar centros grandes y pequeños.</p>
+  <table><thead><tr><th>#</th><th>Centro</th><th>Participantes</th><th>Estrellas</th><th>Promedio</th><th>Misiones</th><th>Líder</th></tr></thead><tbody>
+  ${centros.map((x, i) => `<tr><td>${x.n ? medalla(i) : "—"}</td><td><b>${esc(x.c.nombre)}</b><br><small class="muted">${esc(x.c.region || "")}</small></td><td>${x.n}</td><td>${x.est}</td>
+    <td style="min-width:120px"><b>${x.prom.toFixed(1)}</b><div style="height:8px;border-radius:4px;background:#EEE;margin-top:4px"><div style="height:8px;border-radius:4px;background:var(--oro);width:${Math.round(x.prom / maxProm * 100)}%"></div></div></td>
+    <td>${x.mis}</td><td>${x.lider ? esc(corto(x.lider.nombre)) + ` <small class="muted">(${x.lider.estrellas})</small>` : `<span class="muted">Sin participantes</span>`}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Sin centros.</td></tr>`}
+  </tbody></table></section>
+  <section class="card"><h2>Ranking ${f.reg ? "de " + esc(f.reg) : "nacional"} por persona</h2>
+  <p class="muted" style="font-size:13px">Desempate: menos tiempo total en las misiones y, si sigue igual, quien terminó primero.</p>
+  <table><thead><tr><th>#</th><th>Nombre</th><th>Centro</th><th>Cédula</th><th>Estrellas</th><th>Tiempo</th></tr></thead><tbody>
+  ${ps.slice(0, f.n).map((p, i) => `<tr><td>${medalla(i)}</td><td>${esc(p.nombre)}</td><td>${esc(CENTROS[p.centroId]?.nombre || "")}</td><td>…${esc(p.cedula4)}</td><td><b>${p.estrellas || 0}</b></td><td>${Math.floor((p.segundos || 0) / 60)}:${String(Math.round(p.segundos || 0) % 60).padStart(2, "0")} min</td></tr>`).join("") || `<tr><td colspan="6" class="muted">Aún no hay participantes.</td></tr>`}
+  </tbody></table>
+  ${ps.length > f.n ? `<div class="row" style="margin-top:12px"><button class="btn sec" id="mas">Ver más (${ps.length - f.n} restantes)</button></div>` : ""}
+  <div class="row" style="margin-top:12px"><button class="btn oro" id="dlc">Descargar ranking por centro (CSV)</button><button class="btn oro" id="dlp">Descargar ranking por persona (CSV)</button></div></section>`;
+  $("#fr").onchange = () => admRanking(pane, { reg: $("#fr").value, n: 50 }, [ps0, ints0]);
+  if ($("#mas")) $("#mas").onclick = () => admRanking(pane, { ...f, n: f.n + 50 }, [ps0, ints0]);
+  $("#dlc").onclick = () => csv("ranking-centros.csv", ["Puesto", "Centro", "Región", "Participantes", "Estrellas", "Promedio", "Misiones completadas", "Líder", "Estrellas líder"], centros.map((x, i) => [i + 1, x.c.nombre, x.c.region || "", x.n, x.est, x.prom.toFixed(1), x.mis, x.lider?.nombre || "", x.lider?.estrellas ?? ""]));
+  $("#dlp").onclick = () => csv("ranking-personas.csv", ["Puesto", "Nombre", "Centro", "Región", "Cédula (últimos 4)", "Estrellas", "Segundos totales"], ps.map((p, i) => [i + 1, p.nombre, CENTROS[p.centroId]?.nombre || "", CENTROS[p.centroId]?.region || "", p.cedula4, p.estrellas || 0, Math.round(p.segundos || 0)]));
 }
 async function admEnvios(pane, f = { estado: "pendiente", act: "", centro: "", n: 30 }, cache) {
   const todos = cache || (await DB.all("fotos")).sort((a, b) => (b.ts || 0) - (a.ts || 0));
