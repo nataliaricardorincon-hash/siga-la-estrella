@@ -654,7 +654,7 @@ async function admCentros(pane) {
       $("#regenSi").disabled = true;
       const reales = cs.filter(c => !c.prueba).sort((a, b) => (a.region || "").localeCompare(b.region || "") || a.nombre.localeCompare(b.nombre)), filas = [];
       for (const c of reales) { const n = new Uint32Array(1); crypto.getRandomValues(n); const pin = String(100000 + (n[0] % 900000)); await DB.update("centros", c.id, { pin: await sha(pin) }); filas.push([c.nombre, c.region || "", pin]); }
-      mostrarPines(filas, []);
+      await cargarBase(); $("#mr").innerHTML = ""; mostrarPines(filas, []);
     };
   };
   function mostrarPines(creados, omitidos) {
