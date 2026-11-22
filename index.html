@@ -633,6 +633,9 @@ async function admCentros(pane) {
   <p class="muted" style="font-size:13px">Una línea por centro: <b>Nombre del centro; Región</b>. Regiones: Caribe, Suroccidente, Centro o Antioquia. Puedes pegar dos columnas copiadas de Excel. La app crea un PIN de 6 dígitos para cada centro nuevo; los centros que ya existen se omiten.</p>
   <textarea id="lote" rows="6" style="width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid #ccc" placeholder="Parquiamérica; Caribe&#10;PMI Cali; Suroccidente"></textarea>
   <div id="ml"></div><div class="row" style="margin-top:10px"><button class="btn pri" id="crearLote">Crear centros y generar PIN</button></div><div id="pines"></div>
+  <h3>¿Perdiste los PIN?</h3>
+  <p class="muted" style="font-size:13px">Genera un PIN nuevo para todos los centros reales (no cambia el centro de prueba). Los PIN anteriores dejan de funcionar.</p>
+  <div class="row"><button class="btn sec" id="regen">Generar PIN nuevo para todos</button></div><div id="mr"></div>
   <h3>Inscritos (${cs.length})</h3><table><thead><tr><th>Centro</th><th>Región</th><th></th></tr></thead><tbody>
   ${cs.map(c => `<tr><td>${esc(c.nombre)}${c.prueba ? ` <span class="tag lock">prueba</span>` : ""}</td><td>${esc(c.region || "")}</td><td><div class="row"><button class="btn sec sm" data-pin="${esc(c.id)}">Cambiar PIN</button><button class="btn no sm" data-del="${esc(c.id)}">Eliminar</button></div><div id="x-${esc(c.id)}"></div></td></tr>`).join("") || `<tr><td colspan="3" class="muted">Sin centros todavía.</td></tr>`}
   </tbody></table></section>`;
@@ -644,6 +647,25 @@ async function admCentros(pane) {
     await DB.set("centros", rid(8), { nombre: n, region: $("#r").value, pin: await sha(p), prueba: $("#pr").checked });
     await cargarBase(); admin("centros");
   };
+  $("#regen").onclick = () => {
+    $("#mr").innerHTML = `<div class="banner" style="margin-top:8px">¿Seguro? Los HSEQ tendrán que usar el PIN nuevo. <button class="btn no sm" id="regenSi">Sí, generar</button> <button class="btn sec sm" id="regenNo">Cancelar</button></div>`;
+    $("#regenNo").onclick = () => { $("#mr").innerHTML = ""; };
+    $("#regenSi").onclick = async () => {
+      $("#regenSi").disabled = true;
+      const reales = cs.filter(c => !c.prueba).sort((a, b) => (a.region || "").localeCompare(b.region || "") || a.nombre.localeCompare(b.nombre)), filas = [];
+      for (const c of reales) { const n = new Uint32Array(1); crypto.getRandomValues(n); const pin = String(100000 + (n[0] % 900000)); await DB.update("centros", c.id, { pin: await sha(pin) }); filas.push([c.nombre, c.region || "", pin]); }
+      mostrarPines(filas, []);
+    };
+  };
+  function mostrarPines(creados, omitidos) {
+    $("#pines").innerHTML = `<div class="card" style="background:#FFF8E1;margin-top:10px"><b>Guarda estos PIN ahora.</b> Por seguridad la app no vuelve a mostrarlos; si se pierde uno, usa «Cambiar PIN».
+      <table style="margin-top:8px"><thead><tr><th>Centro</th><th>Región</th><th>PIN</th></tr></thead><tbody>${creados.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td><b>${r[2]}</b></td></tr>`).join("")}</tbody></table>
+      ${omitidos.length ? `<p class="muted" style="font-size:13px">Ya existían: ${esc(omitidos.join(", "))}</p>` : ""}
+      <div class="row" style="margin-top:8px"><button class="btn oro" id="dlp">Descargar PIN (CSV)</button><button class="btn sec" id="cpp">Copiar tabla</button></div><div id="mc"></div></div>`;
+    $("#dlp").onclick = () => csv("pines-hseq-centros.csv", ["Centro", "Región", "PIN"], creados);
+    $("#cpp").onclick = async () => { try { await navigator.clipboard.writeText(["Centro\tRegión\tPIN", ...creados.map(r => r.join("\t"))].join("\n")); msg($("#mc"), "Tabla copiada: pégala en Excel o en tus notas.", "okb"); } catch { msg($("#mc"), "No se pudo copiar; usa Descargar."); } };
+    $("#pines").scrollIntoView({ block: "start" });
+  }
   $("#crearLote").onclick = async () => {
     const REG = { caribe: "Caribe", suroccidente: "Suroccidente", centro: "Centro", antioquia: "Antioquia" };
     const filas = $("#lote").value.split(/\r?\n/).map(l => l.split(/[;\t]/).map(x => x.trim())).filter(x => x[0]);
@@ -660,11 +682,7 @@ async function admCentros(pane) {
     }
     await cargarBase(); await admin("centros");
     if (!creados.length) return msg($("#ml"), "No se creó ningún centro: ya existían todos.", "okb");
-    $("#pines").innerHTML = `<div class="card" style="background:#FFF8E1;margin-top:10px"><b>Guarda estos PIN ahora.</b> Por seguridad la app no vuelve a mostrarlos; si se pierde uno, usa «Cambiar PIN».
-      <table style="margin-top:8px"><thead><tr><th>Centro</th><th>Región</th><th>PIN</th></tr></thead><tbody>${creados.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td><b>${r[2]}</b></td></tr>`).join("")}</tbody></table>
-      ${omitidos.length ? `<p class="muted" style="font-size:13px">Ya existían: ${esc(omitidos.join(", "))}</p>` : ""}
-      <div class="row" style="margin-top:8px"><button class="btn oro" id="dlp">Descargar PIN (CSV)</button></div></div>`;
-    $("#dlp").onclick = () => csv("pines-hseq-centros.csv", ["Centro", "Región", "PIN"], creados);
+    mostrarPines(creados, omitidos);
     $("#dlp").click();
   };
   pane.querySelectorAll("[data-pin]").forEach(b => b.onclick = () => {
