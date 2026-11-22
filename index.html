@@ -669,7 +669,7 @@ function admConfig(pane) {
 
 /* ---------- Arranque ---------- */
 $("#lnkInicio").onclick = () => { S.rol = null; inicio(); };
-try { await cargarBase(); await inicio(); }
+try { await cargarBase(); const h = location.hash.toLowerCase(); if (CFG && (h === "#admin" || h === "#hseq")) login(h.slice(1)); else await inicio(); }
 catch (err) { console.error(err); view(`${tito("alto", "Tito", "sm")}<div class="banner err">No se pudo conectar con la base de datos. Revisa tu conexión y vuelve a intentar.</div>`); }
 </script>
 </body>
