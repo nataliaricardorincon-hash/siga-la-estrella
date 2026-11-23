@@ -94,6 +94,17 @@ footer{text-align:center;color:var(--gris2);font-size:12px;padding:18px}
 
 <script src="preguntas.js?v=20261120-3"></script>
 <script type="module">
+/* Versión publicada: si el celular tiene guardada una versión vieja, se recarga sola. */
+const APP_V = "2026-11-23b";
+(async () => {
+  try {
+    if (sessionStorage.getItem("sle-v") === APP_V) return;
+    const r = await fetch(location.pathname + "?nc=" + Date.now(), { cache: "no-store" });
+    const t = await r.text();
+    if (!t.includes('APP_V = "' + APP_V + '"')) { const m = t.match(/APP_V = "([^"]+)"/); if (m && sessionStorage.getItem("sle-rl") !== m[1]) { sessionStorage.setItem("sle-rl", m[1]); location.replace(location.pathname + "?v=" + m[1] + location.hash); } }
+    else sessionStorage.setItem("sle-v", APP_V);
+  } catch {}
+})();
 /* ================== CONFIGURACIÓN ================== */
 const firebaseConfig = {
   apiKey: "AIzaSyBzwD7c3joMNwl_WvLVHcSSsRTLCVbDu4A",
