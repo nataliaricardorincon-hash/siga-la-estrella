@@ -95,7 +95,7 @@ footer{text-align:center;color:var(--gris2);font-size:12px;padding:18px}
 <script src="preguntas.js?v=20261120-3"></script>
 <script type="module">
 /* Versión publicada: si el celular tiene guardada una versión vieja, se recarga sola. */
-const APP_V = "2026-11-23b";
+const APP_V = "2026-11-23c";
 (async () => {
   try {
     if (sessionStorage.getItem("sle-v") === APP_V) return;
@@ -130,18 +130,18 @@ const FOTOS = [
   { id: "compromiso", fase: "Velitas", ico: "✍️", titulo: "Mi compromiso de temporada", estrellas: 10, abre: "2026-12-01T00:00", cierra: "2026-12-09T23:59", tipo: "texto",
     instr: "Escribe con tus palabras qué vas a hacer para trabajar seguro y llegar sano a casa en esta temporada. Debe ser algo concreto que tú mismo hagas.",
     ejemplos: ["Hago mi inspección preoperacional antes de mover el montacargas, aunque haya afán.", "Uso mi chaleco y mis guantes todo el turno, no solo cuando me ven.", "Si estoy cansado o con sueño, aviso antes de conducir u operar.", "Reporto cualquier condición insegura que vea, el mismo día.", "Respeto los pasillos peatonales y no paso por debajo de cargas."] },
-  { id: "familia", fase: "Navidad", ico: "💌", titulo: "Mensaje de mi familia", estrellas: 10, abre: "2026-12-11T00:00", cierra: "2026-12-23T23:59",
+  { id: "familia", fase: "Navidad", ico: "💌", titulo: "Mensaje de mi familia", estrellas: 10, abre: "2026-12-10T00:00", cierra: "2026-12-25T23:59",
     instr: "Lleva la tarjeta a casa, pide a tu familia que escriba o dibuje por qué te espera sano esta Navidad y sube aquí una foto de la tarjeta.", privada: true },
-  { id: "muro", fase: "Año Nuevo", ico: "📸", titulo: "Muro del orgullo operativo", estrellas: 10, abre: "2026-12-28T00:00", cierra: "2027-01-06T23:59",
+  { id: "muro", fase: "Año Nuevo", ico: "📸", titulo: "Muro del orgullo operativo", estrellas: 10, abre: "2026-12-26T00:00", cierra: "2027-01-01T23:59",
     instr: "Haz tu aporte en el Muro del orgullo operativo de tu centro (foto, mensaje o compromiso) y sube aquí una foto donde se vea tu aporte." },
   /* Actividades en redes: 10 estrellas por publicar + 2 por cada persona etiquetada (hasta 5). */
   { id: "red-tito", fase: "Velitas", ico: "🎄", titulo: "¿Dónde está Tito?", estrellas: 10, abre: "2026-12-01T00:00", cierra: "2026-12-09T23:59", tipo: "red",
     instr: "Encuentra al Tito escondido en el árbol de Navidad de tu centro (búscalo en tus pausas, sin subirte a nada), tómate una selfie con el árbol mostrando dónde estaba Tito y publícala." },
-  { id: "red-invitado", fase: "Navidad", ico: "🤳", titulo: "Selfie con el invitado especial", estrellas: 10, abre: "2026-12-10T00:00", cierra: "2026-12-24T23:59", tipo: "red",
+  { id: "red-invitado", fase: "Navidad", ico: "🤳", titulo: "Selfie con el invitado especial", estrellas: 10, abre: "2026-12-10T00:00", cierra: "2026-12-25T23:59", tipo: "red",
     instr: "Tómate una selfie con el invitado especial el día que visite tu centro, en el punto que indique el HSEQ, y publícala." },
-  { id: "red-proposito", fase: "Año Nuevo", ico: "🎯", titulo: "Mi propósito seguro 2027", estrellas: 10, abre: "2026-12-26T00:00", cierra: "2027-01-03T23:59", tipo: "red",
+  { id: "red-proposito", fase: "Año Nuevo", ico: "🎯", titulo: "Mi propósito seguro 2027", estrellas: 10, abre: "2026-12-26T00:00", cierra: "2027-01-01T23:59", tipo: "red",
     instr: "Escribe tu propósito seguro para 2027 en el cartel de Tito (para tu trabajo o tu casa), tómate una foto con él y publícala." },
-  { id: "red-viaje", fase: "Reyes", ico: "🧳", titulo: "Viaje seguro de Reyes", estrellas: 10, abre: "2027-01-02T00:00", cierra: "2027-01-08T23:59", tipo: "red",
+  { id: "red-viaje", fase: "Reyes", ico: "🧳", titulo: "Viaje seguro de Reyes", estrellas: 10, abre: "2027-01-02T00:00", cierra: "2027-01-09T10:00", tipo: "red",
     instr: "Antes de viajar o volver al trabajo, tómate una foto de tu chequeo: cinturón puesto, casco abrochado o vehículo revisado, siempre estacionado. Publícala." }
 ];
 const RED = { base: 10, porEtiqueta: 2, maxEtiquetas: 5, cuentas: "Instagram @anava_logistics · Facebook ANAVA · LinkedIn ANAVA", hashtags: "#EnANAVANosCuidamos #DiciembreSeguroEnANAVA" };
