@@ -95,7 +95,7 @@ footer{text-align:center;color:var(--gris2);font-size:12px;padding:18px}
 <script src="preguntas.js?v=20261120-3"></script>
 <script type="module">
 /* Versión publicada: si el celular tiene guardada una versión vieja, se recarga sola. */
-const APP_V = "2026-11-23e";
+const APP_V = "2026-11-23f";
 (async () => {
   try {
     if (sessionStorage.getItem("sle-v") === APP_V) return;
@@ -144,9 +144,12 @@ const FOTOS = [
   { id: "red-viaje", fase: "Reyes", ico: "🧳", titulo: "Viaje seguro de Reyes", estrellas: 10, abre: "2027-01-02T00:00", cierra: "2027-01-08T23:59", tipo: "red",
     instr: "Antes de viajar o volver al trabajo, tómate una foto de tu chequeo: cinturón puesto, casco abrochado o vehículo revisado, siempre estacionado. Publícala." }
 ];
-const RED = { base: 10, porEtiqueta: 2, maxEtiquetas: 5, cuentas: "Instagram @anava_logistics · Facebook ANAVA · LinkedIn ANAVA", hashtags: "#EnANAVANosCuidamos #DiciembreSeguroEnANAVA" };
-const maxAct = (a) => a.tipo === "red" ? RED.base + RED.porEtiqueta * RED.maxEtiquetas : a.estrellas;
-const estrellasRed = (n) => RED.base + RED.porEtiqueta * Math.max(0, Math.min(RED.maxEtiquetas, +n || 0));
+/* Redes: 10 por publicar en una red, +5 por cada red adicional (máx. 3 redes), +2 por persona etiquetada (máx. 5). Tope 30. */
+const RED = { base: 10, porRed: 5, porEtiqueta: 2, maxEtiquetas: 5, redes: [["instagram", "Instagram", "@anava_logistics"], ["facebook", "Facebook", "ANAVA"], ["linkedin", "LinkedIn", "ANAVA"]], cuentas: "Instagram @anava_logistics · Facebook ANAVA · LinkedIn ANAVA", hashtags: "#EnANAVANosCuidamos #DiciembreSeguroEnANAVA" };
+const maxAct = (a) => a.tipo === "red" ? RED.base + RED.porRed * (RED.redes.length - 1) + RED.porEtiqueta * RED.maxEtiquetas : a.estrellas;
+const estrellasRed = (n, nRedes = 1) => (Math.max(1, Math.min(RED.redes.length, nRedes)) - 1) * RED.porRed + RED.base + RED.porEtiqueta * Math.max(0, Math.min(RED.maxEtiquetas, +n || 0));
+const nomRed = (k) => (RED.redes.find(r => r[0] === k) || [k, k])[1];
+const verCapturas = (f, alt) => (f.foto ? `<img class="foto" loading="lazy" src="${f.foto}" alt="${esc(alt)}">` : "") + (f.capturas || []).map(c => `<p style="margin:10px 0 4px;font-weight:700">${esc(nomRed(c.red))}</p><img class="foto" loading="lazy" src="${c.img}" alt="Captura de ${esc(nomRed(c.red))}">`).join("");
 const PREG = 5, SEG = 30;
 const FASES = ["Velitas", "Navidad", "Año Nuevo", "Reyes"];
 /* Opiniones: después de cada misión, en cualquier momento, y encuesta de cierre. */
@@ -216,10 +219,14 @@ const abierta = (m) => CFG && !terminada() && (CFG.pruebas || ahora() >= Date.pa
 const maxMision = (m) => (PREG + 1) * (m.doble ? 2 : 1);
 function view(html) { app.innerHTML = (DEMO ? `<div class="banner demo">Modo demostración: los datos se guardan solo en este navegador.</div>` : "") + (CFG?.pruebas ? `<div class="banner demo">Modo pruebas activo: todas las misiones están abiertas.</div>` : "") + html; window.scrollTo(0, 0); }
 function msg(el, t, tipo = "err") { el.innerHTML = `<div class="banner ${tipo}" role="alert">${esc(t)}</div>`; }
-function comprimir(file) {
+async function comprimirMax(file, maxChars = 230000) {
+  for (const [lado, q] of [[1400, 0.6], [1200, 0.5], [1000, 0.45], [800, 0.4]]) { const d = await comprimir(file, lado, q); if (!d || d.length <= maxChars) return d; }
+  return comprimir(file, 700, 0.35);
+}
+function comprimir(file, lado = 900, q = 0.6) {
   return new Promise((res) => {
     const img = new Image(); const url = URL.createObjectURL(file);
-    img.onload = () => { const k = Math.min(1, 900 / Math.max(img.width, img.height)); const cv = document.createElement("canvas"); cv.width = img.width * k; cv.height = img.height * k; cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); res(cv.toDataURL("image/jpeg", 0.6)); };
+    img.onload = () => { const k = Math.min(1, lado / Math.max(img.width, img.height)); const cv = document.createElement("canvas"); cv.width = img.width * k; cv.height = img.height * k; cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); res(cv.toDataURL("image/jpeg", q)); };
     img.onerror = () => res(null); img.src = url;
   });
 }
@@ -489,25 +496,35 @@ async function subirFoto(p, a) {
 async function subirRed(p, a) {
   view(`<section class="card hero"><div style="font-size:54px" aria-hidden="true">${a.ico}</div><h1>${esc(a.titulo)}</h1><p>Hasta ${maxAct(a)} estrellas cuando el HSEQ de tu centro apruebe tu publicación</p></section>
   <section class="card"><p>${esc(a.instr)}</p>
-  <ol style="padding-left:20px;line-height:1.5"><li>Publica tu foto en tus redes.</li><li>Etiqueta a ANAVA: <b>${esc(RED.cuentas)}</b>.</li><li>Escribe los dos hashtags: <b>${esc(RED.hashtags)}</b></li><li>Etiqueta a familiares o compañeros: <b>+${RED.porEtiqueta} estrellas por cada uno</b>, hasta ${RED.maxEtiquetas}.</li><li>Toma una captura de pantalla de tu publicación y súbela aquí.</li></ol>
+  <ol style="padding-left:20px;line-height:1.5"><li>Publica tu foto en una o varias redes: <b>Instagram, Facebook o LinkedIn</b>.</li><li>En cada publicación etiqueta a ANAVA (<b>${esc(RED.cuentas)}</b>) y escribe los dos hashtags: <b>${esc(RED.hashtags)}</b></li><li>Etiqueta a familiares o compañeros.</li><li>Toma una captura de cada publicación y súbela aquí.</li></ol>
+  <div class="card" style="background:#EEF2FB;margin:8px 0"><b>Así ganas estrellas</b><br>${RED.base} ⭐ por publicar · +${RED.porRed} ⭐ por cada red adicional (máx. ${RED.redes.length} redes) · +${RED.porEtiqueta} ⭐ por cada persona etiquetada (máx. ${RED.maxEtiquetas}). Tope: ${maxAct(a)} ⭐</div>
   <p class="muted" style="font-size:13px">Sin rostros de niños (pueden salir de espaldas). No tomes fotos en zonas de operación ni áreas del cliente. Nunca publiques mientras conduces.</p>
-  <label for="ne">¿A cuántas personas etiquetaste?</label><select id="ne">${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}">${n === 5 ? "5 o más" : n}</option>`).join("")}</select>
-  <p id="calc" style="font-weight:700;margin:6px 0">Ganarías ${RED.base} estrellas</p>
-  <label for="fo">Captura de tu publicación</label><input id="fo" type="file" accept="image/*">
-  <img id="pre" class="foto hidden" alt="Vista previa">
+  <label>¿En qué redes publicaste? Sube una captura por cada una</label>
+  ${RED.redes.map(([k, n, c]) => `<div class="card" style="background:#FCFCFC;margin:8px 0;padding:12px"><label class="check" style="margin:0"><input type="checkbox" data-red="${k}"> <b>${n}</b> <small class="muted">(${esc(c)})</small></label>
+    <div id="box-${k}" class="hidden" style="margin-top:8px"><input id="fo-${k}" type="file" accept="image/*"><img id="pre-${k}" class="foto hidden" alt="Captura de ${n}"></div></div>`).join("")}
+  <label for="ne">¿A cuántas personas etiquetaste? (en tu publicación principal)</label><select id="ne">${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}">${n === 5 ? "5 o más" : n}</option>`).join("")}</select>
+  <p id="calc" style="font-weight:700;margin:6px 0">Marca al menos una red</p>
   <div id="m"></div>
-  <div class="row" style="margin-top:12px"><button class="btn pri" id="env" disabled>Enviar captura</button><button class="btn sec" id="vol">Volver</button></div></section>`);
-  let foto = null;
-  $("#ne").onchange = () => { $("#calc").textContent = `Ganarías ${estrellasRed($("#ne").value)} estrellas`; };
+  <div class="row" style="margin-top:12px"><button class="btn pri" id="env" disabled>Enviar capturas</button><button class="btn sec" id="vol">Volver</button></div></section>`);
+  const caps = {};
+  const marcadas = () => [...app.querySelectorAll("[data-red]")].filter(c => c.checked).map(c => c.dataset.red);
+  const recalc = () => {
+    const rs = marcadas(); const listo = rs.length && rs.every(k => caps[k]);
+    $("#calc").textContent = rs.length ? `Ganarías ${estrellasRed($("#ne").value, rs.length)} estrellas` : "Marca al menos una red";
+    $("#env").disabled = !listo;
+  };
+  app.querySelectorAll("[data-red]").forEach(c => c.onchange = () => { $("#box-" + c.dataset.red).classList.toggle("hidden", !c.checked); recalc(); });
+  RED.redes.forEach(([k]) => { $("#fo-" + k).onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const d = await comprimirMax(f); if (!d) return msg($("#m"), "No se pudo leer la imagen. Intenta con otra."); caps[k] = d; $("#pre-" + k).src = d; $("#pre-" + k).classList.remove("hidden"); recalc(); }; });
+  $("#ne").onchange = recalc;
   $("#vol").onclick = () => panel(p);
-  $("#fo").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; foto = await comprimir(f); if (!foto) return msg($("#m"), "No se pudo leer la imagen. Intenta con otra."); $("#pre").src = foto; $("#pre").classList.remove("hidden"); $("#env").disabled = false; };
   $("#env").onclick = async () => {
+    const rs = marcadas(); if (!rs.length || !rs.every(k => caps[k])) return msg($("#m"), "Sube una captura por cada red que marcaste.");
     $("#env").disabled = true; const n = +$("#ne").value;
     try {
-      await DB.set("fotos", p.id + "_" + a.id, { pid: p.id, nombre: p.nombre, centroId: p.centroId, actividad: a.id, foto, etiquetas: n, estado: "pendiente", motivo: "", ts: ahora() });
-      view(`<section class="card hero">${tito("enviado", "Tito con el pulgar arriba")}<h1>¡Publicación enviada!</h1><p>El HSEQ de tu centro revisará tu captura. Si todo está bien, sumarás ${estrellasRed(n)} estrellas.</p></section><button class="btn pri full" id="vol">Volver a mis misiones</button>`);
+      await DB.set("fotos", p.id + "_" + a.id, { pid: p.id, nombre: p.nombre, centroId: p.centroId, actividad: a.id, foto: "", capturas: rs.map(k => ({ red: k, img: caps[k] })), redes: rs, etiquetas: n, estado: "pendiente", motivo: "", ts: ahora() });
+      view(`<section class="card hero">${tito("enviado", "Tito con el pulgar arriba")}<h1>¡Capturas enviadas!</h1><p>El HSEQ de tu centro las revisará. Si todo está bien, sumarás ${estrellasRed(n, rs.length)} estrellas.</p></section><button class="btn pri full" id="vol">Volver a mis misiones</button>`);
       $("#vol").onclick = async () => panel(await DB.get("participantes", p.id));
-    } catch { $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Revisa tu conexión e intenta otra vez."); }
+    } catch (err) { console.error(err); $("#env").disabled = false; msg($("#m"), "No se pudo enviar. Revisa tu conexión e intenta otra vez."); }
   };
 }
 
@@ -613,22 +630,29 @@ async function hseq(tab = "fotos") {
     <div class="row" style="justify-content:space-between"><b>${esc(a.titulo)}</b><span class="tag ${f.estado === "pendiente" ? "pend" : f.estado === "aprobada" ? "val" : "rec"}">${f.estado}</span></div>
     <p class="muted" style="margin:4px 0">${esc(f.nombre)} · ${new Date(f.ts).toLocaleString("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
     <p style="font-size:13px" class="muted">Criterio: ${esc(a.instr)}</p>
-    ${f.foto ? `<img class="foto" src="${f.foto}" alt="Foto enviada por ${esc(f.nombre)}">` : ""}${f.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(f.texto)}»</blockquote>` : ""}
-    ${a.tipo === "red" ? `<p style="font-size:13px;margin:4px 0"><b>Revisa en la captura:</b> etiqueta a ANAVA (${esc(RED.cuentas)}) y los hashtags ${esc(RED.hashtags)}. Declaró <b>${f.etiquetas || 0}</b> personas etiquetadas.</p>
-      ${f.estado === "pendiente" ? `<label for="ce-${esc(f.id)}">Personas etiquetadas que ves en la captura</label><select id="ce-${esc(f.id)}" data-ce="${esc(f.id)}">${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === Math.min(5, f.etiquetas || 0) ? "selected" : ""}>${n}${n === 5 ? " o más" : ""}</option>`).join("")}</select>` : `<p style="font-size:13px">Etiquetas validadas: ${f.etiquetas ?? 0} · ${f.estrellas ?? ""} ⭐</p>`}` : ""}
-    ${f.estado === "pendiente" ? `<div class="row"><button class="btn ok sm" data-ok="${esc(f.id)}">Aprobar (+<span id="se-${esc(f.id)}">${a.tipo === "red" ? estrellasRed(f.etiquetas) : a.estrellas}</span> ⭐)</button><button class="btn no sm" data-no="${esc(f.id)}">Rechazar</button></div><div id="r-${esc(f.id)}"></div>` : f.motivo ? `<p>Motivo: ${esc(f.motivo)}</p>` : ""}
+    ${verCapturas(f, "Foto enviada por " + f.nombre)}${f.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(f.texto)}»</blockquote>` : ""}
+    ${a.tipo === "red" ? `<p style="font-size:13px;margin:4px 0"><b>Revisa en cada captura:</b> etiqueta a ANAVA (${esc(RED.cuentas)}) y los dos hashtags ${esc(RED.hashtags)}. Declaró <b>${(f.redes || ["instagram"]).length}</b> red(es) y <b>${f.etiquetas || 0}</b> personas etiquetadas.</p>
+      ${f.estado === "pendiente" ? `<label>Redes válidas (la captura muestra etiqueta y los dos hashtags)</label><div class="row" style="flex-wrap:wrap">${(f.redes || []).map(k => `<label class="check" style="margin:0 12px 0 0"><input type="checkbox" checked data-vr="${esc(f.id)}" value="${esc(k)}"> ${esc(nomRed(k))}</label>`).join("")}</div>
+        <label for="ce-${esc(f.id)}">Personas etiquetadas que ves</label><select id="ce-${esc(f.id)}" data-ce="${esc(f.id)}">${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === Math.min(5, f.etiquetas || 0) ? "selected" : ""}>${n}${n === 5 ? " o más" : ""}</option>`).join("")}</select>` : `<p style="font-size:13px">Validado: ${(f.redes || []).map(nomRed).join(", ")} · ${f.etiquetas ?? 0} etiquetas · ${f.estrellas ?? ""} ⭐</p>`}` : ""}
+    ${f.estado === "pendiente" ? `<div class="row"><button class="btn ok sm" data-ok="${esc(f.id)}">Aprobar (+<span id="se-${esc(f.id)}">${a.tipo === "red" ? estrellasRed(f.etiquetas, (f.redes || [1]).length) : a.estrellas}</span> ⭐)</button><button class="btn no sm" data-no="${esc(f.id)}">Rechazar</button></div><div id="r-${esc(f.id)}"></div>` : f.motivo ? `<p>Motivo: ${esc(f.motivo)}</p>` : ""}
   </div>`; }).join("") : `${tito("hseq", "Tito", "sm")}<p class="muted" style="text-align:center">${tab === "fotos" ? "No hay nada pendiente por revisar." : "Aún no has revisado nada."}</p>`}</section>`;
-  pane.querySelectorAll("[data-ce]").forEach(sel => sel.onchange = () => { $("#se-" + CSS.escape(sel.dataset.ce)).textContent = estrellasRed(sel.value); });
+  const redesOk = (id) => [...pane.querySelectorAll(`[data-vr="${CSS.escape(id)}"]`)].filter(c => c.checked).map(c => c.value);
+  const recalcH = (id) => { const rs = redesOk(id); const el = $("#se-" + CSS.escape(id)); el.textContent = rs.length ? estrellasRed($("#ce-" + CSS.escape(id)).value, rs.length) : 0; };
+  pane.querySelectorAll("[data-ce]").forEach(sel => sel.onchange = () => recalcH(sel.dataset.ce));
+  pane.querySelectorAll("[data-vr]").forEach(c => c.onchange = () => recalcH(c.dataset.vr));
   pane.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
     b.disabled = true; const f = lista.find(x => x.id === b.dataset.ok); const a = FOTOS.find(x => x.id === f.actividad);
     const actual = await DB.get("fotos", f.id); if (actual.estado !== "pendiente") return hseq(tab);
     const n = a.tipo === "red" ? +($("#ce-" + CSS.escape(f.id))?.value || 0) : null;
-    const gana = a.tipo === "red" ? estrellasRed(n) : a.estrellas;
-    await DB.update("fotos", f.id, a.tipo === "red" ? { estado: "aprobada", revisado: ahora(), etiquetas: n, estrellas: gana } : { estado: "aprobada", revisado: ahora() });
+    const rs = a.tipo === "red" ? (f.redes ? redesOk(f.id) : ["instagram"]) : null;
+    if (a.tipo === "red" && !rs.length) { b.disabled = false; return alertaBox(f.id, "Si ninguna red es válida, rechaza el envío y explica el motivo."); }
+    const gana = a.tipo === "red" ? estrellasRed(n, rs.length) : a.estrellas;
+    await DB.update("fotos", f.id, a.tipo === "red" ? { estado: "aprobada", revisado: ahora(), etiquetas: n, redes: rs, estrellas: gana } : { estado: "aprobada", revisado: ahora() });
     await DB.inc("participantes", f.pid, { estrellas: gana });
     await DB.update("participantes", f.pid, { ultimo: ahora() });
     hseq(tab);
   });
+  function alertaBox(id, t) { const box = $("#r-" + CSS.escape(id)); if (box) msg(box, t); }
   pane.querySelectorAll("[data-no]").forEach(b => b.onclick = () => {
     const box = $("#r-" + CSS.escape(b.dataset.no));
     box.innerHTML = `<label for="mo">Motivo del rechazo (lo verá el trabajador)</label><input id="mo" maxlength="120" placeholder="Ej.: no se ve el mensaje / el compromiso no es concreto"><div class="row" style="margin-top:8px"><button class="btn no sm" id="cr">Confirmar rechazo</button></div>`;
@@ -812,7 +836,7 @@ async function admPersona(pane, p, ints0) {
   <section class="card"><h2>Fotos, compromisos y redes</h2>
   ${FOTOS.map(a => { const x = fotos.find(y => y.actividad === a.id); const e = x ? (EST[x.estado] || [x.estado, "pend"]) : null; return `<div class="card" style="background:#FCFCFC;margin:10px 0 0"><div class="row" style="justify-content:space-between"><b>${a.ico} ${esc(a.titulo)}</b>${e ? `<span class="tag ${e[1]}">${e[0]}</span>` : `<span class="muted" style="font-size:13px">No enviado</span>`}</div>
     ${x ? `<small class="muted">Enviado ${fecha(x.ts)}${x.revisado ? ` · revisado ${fecha(x.revisado)}` : ""}${x.etiquetas != null ? ` · ${x.etiquetas} personas etiquetadas` : ""}${x.estado === "aprobada" ? ` · ${x.estrellas || a.estrellas} ⭐` : ""}</small>
-    ${x.foto ? `<img class="foto" loading="lazy" src="${x.foto}" alt="Envío de ${esc(p.nombre)}">` : ""}${x.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(x.texto)}»</blockquote>` : ""}${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo:</b> ${esc(x.motivo)}</small>` : ""}` : ""}</div>`; }).join("")}
+    ${verCapturas(x, "Envío de " + p.nombre)}${x.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(x.texto)}»</blockquote>` : ""}${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo:</b> ${esc(x.motivo)}</small>` : ""}` : ""}</div>`; }).join("")}
   </section>`;
   $("#volR").onclick = () => admin("ranking");
 }
@@ -835,8 +859,8 @@ async function admEnvios(pane, f = { estado: "pendiente", act: "", centro: "", n
   ${lista.slice(0, f.n).map(x => { const a = FOTOS.find(y => y.id === x.actividad); const e = EST[x.estado] || [x.estado, "lock"]; return `<div class="card" style="background:#FCFCFC;margin:12px 0 0">
     <div class="row" style="justify-content:space-between"><b>${esc(a?.titulo || x.actividad)}</b><span class="tag ${e[1]}">${e[0]}</span></div>
     <small class="muted">${esc(x.nombre)} · ${esc(CENTROS[x.centroId]?.nombre || "Sin centro")} · enviado ${fecha(x.ts)}${x.revisado ? ` · revisado ${fecha(x.revisado)}` : ""}</small>
-    ${x.foto ? `<img class="foto" loading="lazy" src="${x.foto}" alt="Foto enviada por ${esc(x.nombre)}">` : ""}${x.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(x.texto)}»</blockquote>` : ""}
-    ${x.etiquetas != null ? `<small>Personas etiquetadas: ${x.etiquetas}${x.estrellas ? ` · ${x.estrellas} ⭐ aprobadas` : ""}</small><br>` : ""}${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo del rechazo:</b> ${esc(x.motivo)}</small>` : ""}</div>`; }).join("") || `<p class="muted">No hay envíos con estos filtros.</p>`}
+    ${verCapturas(x, "Foto enviada por " + x.nombre)}${x.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(x.texto)}»</blockquote>` : ""}
+    ${x.etiquetas != null ? `<small>Redes: ${(x.redes || []).map(nomRed).join(", ") || "—"} · personas etiquetadas: ${x.etiquetas}${x.estrellas ? ` · ${x.estrellas} ⭐ aprobadas` : ""}</small><br>` : ""}${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo del rechazo:</b> ${esc(x.motivo)}</small>` : ""}</div>`; }).join("") || `<p class="muted">No hay envíos con estos filtros.</p>`}
   ${lista.length > f.n ? `<div class="row" style="margin-top:12px"><button class="btn sec" id="mas">Ver más (${lista.length - f.n} restantes)</button></div>` : ""}
   <div class="row" style="margin-top:12px"><button class="btn oro" id="dle">Descargar listado (CSV, sin fotos)</button></div></section>`;
   activarChk("envios");
