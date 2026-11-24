@@ -95,7 +95,7 @@ footer{text-align:center;color:var(--gris2);font-size:12px;padding:18px}
 <script src="preguntas.js?v=20261120-3"></script>
 <script type="module">
 /* Versión publicada: si el celular tiene guardada una versión vieja, se recarga sola. */
-const APP_V = "2026-11-23d";
+const APP_V = "2026-11-23e";
 (async () => {
   try {
     if (sessionStorage.getItem("sle-v") === APP_V) return;
@@ -225,6 +225,12 @@ function comprimir(file) {
 }
 const ordenRank = (a, b) => (b.estrellas || 0) - (a.estrellas || 0) || (a.segundos || 0) - (b.segundos || 0) || (a.ultimo || 0) - (b.ultimo || 0);
 const valido = (p) => p && CENTROS[p.centroId] && !CENTROS[p.centroId].prueba;
+/* En administración se puede incluir el centro de prueba para revisar resultados mientras hay pruebas (nunca cuenta para ganadores). */
+let VER_PRUEBA = null;
+const verPrueba = () => VER_PRUEBA ?? !!CFG?.pruebas;
+const validoAdm = (p) => p && CENTROS[p.centroId] && (verPrueba() || !CENTROS[p.centroId].prueba);
+const chkPrueba = () => `<label class="check" style="margin:0 0 10px"><input type="checkbox" id="vp" ${verPrueba() ? "checked" : ""}> Incluir el centro de prueba en estos resultados (no cuenta para ganadores)</label>`;
+function activarChk(tab) { const c = $("#vp"); if (c) c.onchange = () => { VER_PRUEBA = c.checked; admin(tab); }; }
 
 /* ================== PARTICIPANTE ================== */
 async function inicio() {
@@ -647,13 +653,16 @@ async function admin(tab = "resumen") {
     const p = ps.filter(x => x.centroId === c.id);
     return { c, part: p.length, est: p.reduce((s, x) => s + (x.estrellas || 0), 0), mis: ints.filter(x => x.centroId === c.id && x.estado === "terminado").length, pend: fotos.filter(x => x.centroId === c.id && x.estado === "pendiente").length };
   });
-  pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
-    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.filter(valido).length}</div>participantes</div>
-    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ints.filter(x => x.estado === "terminado").length}</div>misiones completadas</div>
-    <div class="card"><div class="estrellas" style="color:var(--rojo)">${fotos.filter(x => x.estado === "pendiente").length}</div>por revisar (fotos y compromisos)</div></div>
+  const enVista = (cid) => CENTROS[cid] && (verPrueba() || !CENTROS[cid].prueba);
+  pane.innerHTML = `${chkPrueba()}<div class="grid2" style="margin-bottom:12px">
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.filter(validoAdm).length}</div>participantes</div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${ints.filter(x => x.estado === "terminado" && enVista(x.centroId)).length}</div>misiones completadas</div>
+    <div class="card"><div class="estrellas" style="color:var(--rojo)">${fotos.filter(x => x.estado === "pendiente" && enVista(x.centroId)).length}</div>por revisar (fotos, compromisos y redes)</div></div>
+  <div class="row" style="margin-bottom:12px"><button class="btn sec sm" id="irRank">Ver ranking y resultados por persona</button><button class="btn sec sm" id="irEnv">Ver fotos y compromisos</button></div>
   <section class="card"><h2>Avance por centro</h2><table><thead><tr><th>Centro</th><th>Participantes</th><th>Misiones</th><th>Fotos pendientes</th><th>Estrellas</th></tr></thead><tbody>
   ${filas.map(f => `<tr><td>${esc(f.c.nombre)}${f.c.prueba ? ` <span class="tag lock">prueba</span>` : ""}<br><small class="muted">${esc(f.c.region || "")}</small></td><td>${f.part}</td><td>${f.mis}</td><td>${f.pend ? `<span class="tag pend">${f.pend}</span>` : "0"}</td><td><b>${f.est}</b></td></tr>`).join("") || `<tr><td colspan="5" class="muted">Crea los centros en la pestaña Centros.</td></tr>`}
   </tbody></table><div class="row" style="margin-top:12px"><button class="btn oro" id="csv">Descargar participantes (CSV)</button></div></section>`;
+  activarChk("resumen"); $("#irRank").onclick = () => admin("ranking"); $("#irEnv").onclick = () => admin("envios");
   $("#csv").onclick = () => csv("participantes-siga-la-estrella.csv", ["Centro", "Región", "Nombre", "Cédula (últimos 4)", "Estrellas", "Segundos en trivias", "Prueba"], ps.sort(ordenRank).map(x => [CENTROS[x.centroId]?.nombre, CENTROS[x.centroId]?.region, x.nombre, x.cedula4, x.estrellas, x.segundos, CENTROS[x.centroId]?.prueba ? "Sí" : "No"]));
 }
 function csv(nombre, head, rows) {
@@ -754,16 +763,16 @@ async function admCentros(pane) {
 async function admRanking(pane, f = { reg: "", n: 50 }, cache) {
   const [ps0, ints0] = cache || await Promise.all([DB.all("participantes"), DB.all("intentos")]);
   const enReg = (cid) => !f.reg || CENTROS[cid]?.region === f.reg;
-  const ps = ps0.filter(valido).filter(p => enReg(p.centroId)).sort(ordenRank);
+  const ps = ps0.filter(validoAdm).filter(p => enReg(p.centroId)).sort(ordenRank);
   const fin = ints0.filter(x => x.estado === "terminado");
-  const centros = Object.values(CENTROS).filter(c => !c.prueba && enReg(c.id)).map(c => {
+  const centros = Object.values(CENTROS).filter(c => (verPrueba() || !c.prueba) && enReg(c.id)).map(c => {
     const pc = ps.filter(p => p.centroId === c.id), est = pc.reduce((s, p) => s + (p.estrellas || 0), 0);
     return { c, n: pc.length, est, prom: pc.length ? est / pc.length : 0, mis: fin.filter(x => x.centroId === c.id).length, lider: pc[0] };
   }).sort((a, b) => b.prom - a.prom || b.n - a.n || a.c.nombre.localeCompare(b.c.nombre));
   const maxProm = Math.max(1, ...centros.map(x => x.prom));
   const regs = [...new Set(Object.values(CENTROS).filter(c => !c.prueba).map(c => c.region))].filter(Boolean).sort();
   const medalla = (i) => ["🥇", "🥈", "🥉"][i] || i + 1;
-  pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
+  pane.innerHTML = `${chkPrueba()}<div class="grid2" style="margin-bottom:12px">
     <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.length}</div>participantes</div>
     <div class="card"><div class="estrellas" style="color:var(--rojo)">${centros.filter(x => x.n).length} / ${centros.length}</div>centros participando</div>
     <div class="card"><div class="estrellas" style="color:var(--rojo)">${ps.reduce((s, p) => s + (p.estrellas || 0), 0)}</div>estrellas en total</div></div>
@@ -776,24 +785,45 @@ async function admRanking(pane, f = { reg: "", n: 50 }, cache) {
     <td>${x.mis}</td><td>${x.lider ? esc(corto(x.lider.nombre)) + ` <small class="muted">(${x.lider.estrellas})</small>` : `<span class="muted">Sin participantes</span>`}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Sin centros.</td></tr>`}
   </tbody></table></section>
   <section class="card"><h2>Ranking ${f.reg ? "de " + esc(f.reg) : "nacional"} por persona</h2>
-  <p class="muted" style="font-size:13px">Desempate: menos tiempo total en las misiones y, si sigue igual, quien terminó primero.</p>
+  <p class="muted" style="font-size:13px">Desempate: menos tiempo total en las misiones y, si sigue igual, quien terminó primero. <b>Toca un nombre</b> para ver sus misiones, fotos y compromisos.</p>
   <table><thead><tr><th>#</th><th>Nombre</th><th>Centro</th><th>Cédula</th><th>Estrellas</th><th>Tiempo</th></tr></thead><tbody>
-  ${ps.slice(0, f.n).map((p, i) => `<tr><td>${medalla(i)}</td><td>${esc(p.nombre)}</td><td>${esc(CENTROS[p.centroId]?.nombre || "")}</td><td>…${esc(p.cedula4)}</td><td><b>${p.estrellas || 0}</b></td><td>${Math.floor((p.segundos || 0) / 60)}:${String(Math.round(p.segundos || 0) % 60).padStart(2, "0")} min</td></tr>`).join("") || `<tr><td colspan="6" class="muted">Aún no hay participantes.</td></tr>`}
+  ${ps.slice(0, f.n).map((p, i) => `<tr><td>${medalla(i)}</td><td><button class="btn sec sm" data-per="${esc(p.id)}" style="text-align:left">${esc(p.nombre)}</button></td><td>${esc(CENTROS[p.centroId]?.nombre || "")}</td><td>…${esc(p.cedula4)}</td><td><b>${p.estrellas || 0}</b></td><td>${Math.floor((p.segundos || 0) / 60)}:${String(Math.round(p.segundos || 0) % 60).padStart(2, "0")} min</td></tr>`).join("") || `<tr><td colspan="6" class="muted">Aún no hay participantes.</td></tr>`}
   </tbody></table>
   ${ps.length > f.n ? `<div class="row" style="margin-top:12px"><button class="btn sec" id="mas">Ver más (${ps.length - f.n} restantes)</button></div>` : ""}
   <div class="row" style="margin-top:12px"><button class="btn oro" id="dlc">Descargar ranking por centro (CSV)</button><button class="btn oro" id="dlp">Descargar ranking por persona (CSV)</button></div></section>`;
+  activarChk("ranking");
+  pane.querySelectorAll("[data-per]").forEach(b => b.onclick = () => admPersona(pane, ps0.find(x => x.id === b.dataset.per), ints0));
   $("#fr").onchange = () => admRanking(pane, { reg: $("#fr").value, n: 50 }, [ps0, ints0]);
   if ($("#mas")) $("#mas").onclick = () => admRanking(pane, { ...f, n: f.n + 50 }, [ps0, ints0]);
   $("#dlc").onclick = () => csv("ranking-centros.csv", ["Puesto", "Centro", "Región", "Participantes", "Estrellas", "Promedio", "Misiones completadas", "Líder", "Estrellas líder"], centros.map((x, i) => [i + 1, x.c.nombre, x.c.region || "", x.n, x.est, x.prom.toFixed(1), x.mis, x.lider?.nombre || "", x.lider?.estrellas ?? ""]));
   $("#dlp").onclick = () => csv("ranking-personas.csv", ["Puesto", "Nombre", "Centro", "Región", "Cédula (últimos 4)", "Estrellas", "Segundos totales"], ps.map((p, i) => [i + 1, p.nombre, CENTROS[p.centroId]?.nombre || "", CENTROS[p.centroId]?.region || "", p.cedula4, p.estrellas || 0, Math.round(p.segundos || 0)]));
 }
+async function admPersona(pane, p, ints0) {
+  const fotos = (await DB.all("fotos")).filter(x => x.pid === p.id);
+  const ints = ints0.filter(x => x.pid === p.id);
+  const fecha = (t) => t ? new Date(t).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
+  const EST = { pendiente: ["Sin validar", "pend"], aprobada: ["Aprobada", "val"], rechazada: ["Rechazada", "rec"] };
+  pane.innerHTML = `<div class="row" style="margin-bottom:12px"><button class="btn sec sm" id="volR">← Volver al ranking</button></div>
+  <section class="card"><h2 style="margin-bottom:4px">${esc(p.nombre)}</h2><p class="muted" style="margin-top:0">${esc(CENTROS[p.centroId]?.nombre || "")} · ${esc(CENTROS[p.centroId]?.region || "")} · cédula …${esc(p.cedula4)}${CENTROS[p.centroId]?.prueba ? ` · <span class="tag lock">prueba</span>` : ""}</p>
+  <div class="estrellas" style="color:var(--rojo)">${p.estrellas || 0} ⭐</div><p class="muted" style="margin-top:0">Tiempo en misiones: ${Math.floor((p.segundos || 0) / 60)}:${String(Math.round(p.segundos || 0) % 60).padStart(2, "0")} min · última actividad ${fecha(p.ultimo)}</p></section>
+  <section class="card"><h2>Misiones</h2><table><thead><tr><th>Misión</th><th>Estado</th><th>Aciertos</th><th>Estrellas</th></tr></thead><tbody>
+  ${MISIONES.map(m => { const it = ints.find(x => x.mision === m.id); return `<tr><td>${esc(m.titulo)}</td><td>${it ? (it.estado === "terminado" ? `<span class="tag val">Terminada</span>` : `<span class="tag pend">En curso</span>`) : `<span class="muted">Sin jugar</span>`}</td><td>${it ? (it.correctas ?? 0) + " de " + PREG : "—"}</td><td>${it?.estado === "terminado" ? `<b>${it.estrellas}</b> de ${maxMision(m)}` : "—"}</td></tr>`; }).join("")}
+  </tbody></table></section>
+  <section class="card"><h2>Fotos, compromisos y redes</h2>
+  ${FOTOS.map(a => { const x = fotos.find(y => y.actividad === a.id); const e = x ? (EST[x.estado] || [x.estado, "pend"]) : null; return `<div class="card" style="background:#FCFCFC;margin:10px 0 0"><div class="row" style="justify-content:space-between"><b>${a.ico} ${esc(a.titulo)}</b>${e ? `<span class="tag ${e[1]}">${e[0]}</span>` : `<span class="muted" style="font-size:13px">No enviado</span>`}</div>
+    ${x ? `<small class="muted">Enviado ${fecha(x.ts)}${x.revisado ? ` · revisado ${fecha(x.revisado)}` : ""}${x.etiquetas != null ? ` · ${x.etiquetas} personas etiquetadas` : ""}${x.estado === "aprobada" ? ` · ${x.estrellas || a.estrellas} ⭐` : ""}</small>
+    ${x.foto ? `<img class="foto" loading="lazy" src="${x.foto}" alt="Envío de ${esc(p.nombre)}">` : ""}${x.texto ? `<blockquote style="margin:8px 0;padding:10px 12px;background:#fff;border-left:4px solid var(--rojo);border-radius:6px">«${esc(x.texto)}»</blockquote>` : ""}${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo:</b> ${esc(x.motivo)}</small>` : ""}` : ""}</div>`; }).join("")}
+  </section>`;
+  $("#volR").onclick = () => admin("ranking");
+}
 async function admEnvios(pane, f = { estado: "pendiente", act: "", centro: "", n: 30 }, cache) {
   const todos = cache || (await DB.all("fotos")).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const EST = { pendiente: ["Sin validar", "pend"], aprobada: ["Aprobada", "val"], rechazada: ["Rechazada", "rec"] };
-  const cuenta = (e) => todos.filter(x => x.estado === e).length;
-  const lista = todos.filter(x => (!f.estado || x.estado === f.estado) && (!f.act || x.actividad === f.act) && (!f.centro || x.centroId === f.centro));
+  const cuenta = (e) => todos.filter(x => x.estado === e && (!CENTROS[x.centroId]?.prueba || verPrueba())).length;
+  const enVista = (cid) => !CENTROS[cid]?.prueba || verPrueba();
+  const lista = todos.filter(x => enVista(x.centroId) && (!f.estado || x.estado === f.estado) && (!f.act || x.actividad === f.act) && (!f.centro || x.centroId === f.centro));
   const fecha = (t) => t ? new Date(t).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
-  pane.innerHTML = `<div class="grid2" style="margin-bottom:12px">
+  pane.innerHTML = `${chkPrueba()}<div class="grid2" style="margin-bottom:12px">
     <div class="card"><div class="estrellas" style="color:var(--warn)">${cuenta("pendiente")}</div>sin validar</div>
     <div class="card"><div class="estrellas" style="color:var(--ok)">${cuenta("aprobada")}</div>aprobados</div>
     <div class="card"><div class="estrellas" style="color:var(--rojo)">${cuenta("rechazada")}</div>rechazados</div></div>
@@ -809,6 +839,7 @@ async function admEnvios(pane, f = { estado: "pendiente", act: "", centro: "", n
     ${x.etiquetas != null ? `<small>Personas etiquetadas: ${x.etiquetas}${x.estrellas ? ` · ${x.estrellas} ⭐ aprobadas` : ""}</small><br>` : ""}${x.estado === "rechazada" && x.motivo ? `<small><b>Motivo del rechazo:</b> ${esc(x.motivo)}</small>` : ""}</div>`; }).join("") || `<p class="muted">No hay envíos con estos filtros.</p>`}
   ${lista.length > f.n ? `<div class="row" style="margin-top:12px"><button class="btn sec" id="mas">Ver más (${lista.length - f.n} restantes)</button></div>` : ""}
   <div class="row" style="margin-top:12px"><button class="btn oro" id="dle">Descargar listado (CSV, sin fotos)</button></div></section>`;
+  activarChk("envios");
   const re = (cambio) => admEnvios(pane, { ...f, n: 30, ...cambio }, todos);
   $("#fe").onchange = () => re({ estado: $("#fe").value });
   $("#fa").onchange = () => re({ act: $("#fa").value });
