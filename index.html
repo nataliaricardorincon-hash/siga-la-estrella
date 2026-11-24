@@ -95,7 +95,7 @@ footer{text-align:center;color:var(--gris2);font-size:12px;padding:18px}
 <script src="preguntas.js?v=20261120-3"></script>
 <script type="module">
 /* Versión publicada: si el celular tiene guardada una versión vieja, se recarga sola. */
-const APP_V = "2026-11-23c";
+const APP_V = "2026-11-23d";
 (async () => {
   try {
     if (sessionStorage.getItem("sle-v") === APP_V) return;
@@ -141,7 +141,7 @@ const FOTOS = [
     instr: "Tómate una selfie con el invitado especial el día que visite tu centro, en el punto que indique el HSEQ, y publícala." },
   { id: "red-proposito", fase: "Año Nuevo", ico: "🎯", titulo: "Mi propósito seguro 2027", estrellas: 10, abre: "2026-12-26T00:00", cierra: "2027-01-01T23:59", tipo: "red",
     instr: "Escribe tu propósito seguro para 2027 en el cartel de Tito (para tu trabajo o tu casa), tómate una foto con él y publícala." },
-  { id: "red-viaje", fase: "Reyes", ico: "🧳", titulo: "Viaje seguro de Reyes", estrellas: 10, abre: "2027-01-02T00:00", cierra: "2027-01-09T10:00", tipo: "red",
+  { id: "red-viaje", fase: "Reyes", ico: "🧳", titulo: "Viaje seguro de Reyes", estrellas: 10, abre: "2027-01-02T00:00", cierra: "2027-01-08T23:59", tipo: "red",
     instr: "Antes de viajar o volver al trabajo, tómate una foto de tu chequeo: cinturón puesto, casco abrochado o vehículo revisado, siempre estacionado. Publícala." }
 ];
 const RED = { base: 10, porEtiqueta: 2, maxEtiquetas: 5, cuentas: "Instagram @anava_logistics · Facebook ANAVA · LinkedIn ANAVA", hashtags: "#EnANAVANosCuidamos #DiciembreSeguroEnANAVA" };
